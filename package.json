@@ -1,0 +1,8 @@
+    {
+       "name": "confirm-token-broker",
+       "type": "module",
+       "dependencies": {
+         "express": "^4.19.2",
+         "firebase-admin": "^12.1.0"
+       }
+     }
