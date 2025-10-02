@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONFIRM License Management - Admin Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .auth-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 5px solid #2b6cb0;
+        }
+        
+        .auth-section h2 {
+            color: #1a365d;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #2b6cb0;
+            box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.1);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #2b6cb0 0%, #3182ce 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(43, 108, 176, 0.3);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #059669 0%, #38a169 100%);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626 0%, #e53e3e 100%);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+        }
+        
+        .section {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .section h2 {
+            color: #1a365d;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        
+        .license-card {
+            background: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .license-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .license-key {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        
+        .copy-btn {
+            background: #059669;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #047857;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.expired {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #059669;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+            align-items: end;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .license-type {
+            background: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .expiry-date {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .actions {
+            margin-top: 15px;
+        }
+        
+        .actions button {
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CONFIRM License Management</h1>
+            <p>Professional Statistical Analysis Suite - Admin Dashboard</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Authentication Section -->
+            <div class="auth-section" id="authSection">
+                <h2>🔐 Admin Authentication</h2>
+                <div class="form-group">
+                    <label for="adminKey">Admin Secret Key:</label>
+                    <input type="password" id="adminKey" placeholder="Enter your admin secret key">
+                </div>
+                <button class="btn" onclick="authenticate()">Authenticate</button>
+                <div id="authMessage"></div>
+            </div>
+            
+            <!-- Dashboard (hidden until authenticated) -->
+            <div class="dashboard hidden" id="dashboard">
+                <!-- Statistics -->
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <h3 id="totalLicenses">-</h3>
+                        <p>Total Licenses</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="activeLicenses">-</h3>
+                        <p>Active Licenses</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="pendingLicenses">-</h3>
+                        <p>Pending Licenses</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="recentLicenses">-</h3>
+                        <p>Recent (24h)</p>
+                    </div>
+                </div>
+                
+                <!-- License Lookup -->
+                <div class="section">
+                    <h2>🔍 Look Up License by Email</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="emailLookup">Customer Email:</label>
+                            <input type="email" id="emailLookup" placeholder="customer@example.com">
+                        </div>
+                        <button class="btn" onclick="lookupEmail()">Look Up License</button>
+                    </div>
+                    <div id="lookupResult"></div>
+                </div>
+                
+                <!-- Pending Licenses -->
+                <div class="section">
+                    <h2>⏳ Pending Licenses (Not Activated)</h2>
+                    <button class="btn" onclick="showPending()">Refresh Pending Licenses</button>
+                    <div id="pendingResult"></div>
+                </div>
+                
+                <!-- Recent Activity -->
+                <div class="section">
+                    <h2>📊 Recent Activity (Last 24 Hours)</h2>
+                    <button class="btn" onclick="showRecent()">Refresh Recent Activity</button>
+                    <div id="recentResult"></div>
+                </div>
+                
+                <!-- Manual License Creation -->
+                <div class="section">
+                    <h2>➕ Create New License</h2>
+                    <div class="form-group">
+                        <label for="createEmail">Customer Email:</label>
+                        <input type="email" id="createEmail" placeholder="customer@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="createType">License Type:</label>
+                        <select id="createType" style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px;">
+                            <option value="student">Student - $49/year</option>
+                            <option value="startup">Startup - $99/month</option>
+                            <option value="professional">Professional - $199/month</option>
+                            <option value="professional_yearly">Professional Yearly - $1,999/year</option>
+                            <option value="enterprise">Enterprise - $499/month</option>
+                            <option value="enterprise_yearly">Enterprise Yearly - $4,999/year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="createDuration">Duration (days):</label>
+                        <input type="number" id="createDuration" placeholder="365" value="365">
+                    </div>
+                    <div class="form-group">
+                        <label for="createNotes">Notes (optional):</label>
+                        <input type="text" id="createNotes" placeholder="Internal notes about this license">
+                    </div>
+                    <button class="btn btn-success" onclick="createLicense()">Create License</button>
+                    <div id="createResult"></div>
+                </div>
+                
+                <!-- License Revocation -->
+                <div class="section">
+                    <h2>🗑️ Revoke License</h2>
+                    <div class="form-group">
+                        <label for="revokeId">License ID or Email:</label>
+                        <input type="text" id="revokeId" placeholder="Enter License ID or email to search">
+                    </div>
+                    <div class="form-group">
+                        <label for="revokeReason">Revocation Reason:</label>
+                        <input type="text" id="revokeReason" placeholder="Reason for revoking this license">
+                    </div>
+                    <button class="btn btn-danger" onclick="revokeLicense()">Revoke License</button>
+                    <div id="revokeResult"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://render-confirmlicense.onrender.com';
+        let adminKey = '';
+        
+        function authenticate() {
+            const key = document.getElementById('adminKey').value.trim();
+            if (!key) {
+                showMessage('authMessage', 'Please enter your admin key', 'error');
+                return;
+            }
+            
+            adminKey = key;
+            
+            // Test authentication by loading recent licenses
+            loadRecentLicenses().then(() => {
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                showMessage('authMessage', 'Authentication successful!', 'success');
+                loadStats();
+            }).catch(() => {
+                showMessage('authMessage', 'Invalid admin key. Please try again.', 'error');
+            });
+        }
+        
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+        
+        async function loadStats() {
+            try {
+                const [recent, pending] = await Promise.all([
+                    fetch(`${API_BASE_URL}/admin/recent-licenses`, {
+                        headers: { 'x-app-secret': adminKey }
+                    }).then(r => r.json()),
+                    fetch(`${API_BASE_URL}/admin/pending-licenses`, {
+                        headers: { 'x-app-secret': adminKey }
+                    }).then(r => r.json())
+                ]);
+                
+                const totalLicenses = recent.licenses.length;
+                const activeLicenses = recent.licenses.filter(l => l.activated).length;
+                const pendingCount = pending.licenses.length;
+                const recentCount = recent.licenses.length;
+                
+                document.getElementById('totalLicenses').textContent = totalLicenses;
+                document.getElementById('activeLicenses').textContent = activeLicenses;
+                document.getElementById('pendingLicenses').textContent = pendingCount;
+                document.getElementById('recentLicenses').textContent = recentCount;
+                
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+        
+        async function loadRecentLicenses() {
+            const response = await fetch(`${API_BASE_URL}/admin/recent-licenses`, {
+                headers: { 'x-app-secret': adminKey }
+            });
+            
+            if (!response.ok) {
+                throw new Error('Authentication failed');
+            }
+            
+            return response.json();
+        }
+        
+        async function lookupEmail() {
+            const email = document.getElementById('emailLookup').value.trim();
+            if (!email) {
+                showMessage('lookupResult', 'Please enter an email address', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/lookup-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-app-secret': adminKey
+                    },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showMessage('lookupResult', data.error, 'error');
+                } else {
+                    displayLicense(data, 'lookupResult');
+                }
+            } catch (error) {
+                showMessage('lookupResult', 'Error: ' + error.message, 'error');
+            }
+        }
+        
+        async function showPending() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/pending-licenses`, {
+                    headers: { 'x-app-secret': adminKey }
+                });
+                
+                const data = await response.json();
+                
+                if (data.licenses.length === 0) {
+                    document.getElementById('pendingResult').innerHTML = '<p>No pending licenses</p>';
+                } else {
+                    let html = `<p class="success">Found ${data.licenses.length} pending licenses:</p>`;
+                    data.licenses.forEach(lic => {
+                        html += createLicenseCard(lic);
+                    });
+                    document.getElementById('pendingResult').innerHTML = html;
+                }
+            } catch (error) {
+                showMessage('pendingResult', 'Error: ' + error.message, 'error');
+            }
+        }
+        
+        async function showRecent() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/recent-licenses`, {
+                    headers: { 'x-app-secret': adminKey }
+                });
+                
+                const data = await response.json();
+                
+                if (data.licenses.length === 0) {
+                    document.getElementById('recentResult').innerHTML = '<p>No licenses created in last 24 hours</p>';
+                } else {
+                    let html = `<p class="success">Found ${data.licenses.length} recent licenses:</p>`;
+                    data.licenses.forEach(lic => {
+                        html += createLicenseCard(lic);
+                    });
+                    document.getElementById('recentResult').innerHTML = html;
+                }
+            } catch (error) {
+                showMessage('recentResult', 'Error: ' + error.message, 'error');
+            }
+        }
+        
+        async function createLicense() {
+            const email = document.getElementById('createEmail').value.trim();
+            const type = document.getElementById('createType').value;
+            const duration = parseInt(document.getElementById('createDuration').value);
+            const notes = document.getElementById('createNotes').value.trim();
+            
+            if (!email || !duration) {
+                showMessage('createResult', 'Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/create-license`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-app-secret': adminKey
+                    },
+                    body: JSON.stringify({
+                        email,
+                        productType: type,
+                        durationDays: duration,
+                        notes
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('createResult', 'License created successfully!', 'success');
+                    displayLicense(data.license, 'createResult');
+                    loadStats(); // Refresh stats
+                } else {
+                    showMessage('createResult', data.error || 'Failed to create license', 'error');
+                }
+            } catch (error) {
+                showMessage('createResult', 'Error: ' + error.message, 'error');
+            }
+        }
+        
+        async function revokeLicense() {
+            const licenseId = document.getElementById('revokeId').value.trim();
+            const reason = document.getElementById('revokeReason').value.trim();
+            
+            if (!licenseId) {
+                showMessage('revokeResult', 'Please enter a License ID or email', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/revoke-license`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-app-secret': adminKey
+                    },
+                    body: JSON.stringify({
+                        licenseId,
+                        reason: reason || 'No reason provided'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('revokeResult', 'License revoked successfully!', 'success');
+                    displayLicense(data.license, 'revokeResult');
+                    loadStats(); // Refresh stats
+                } else {
+                    showMessage('revokeResult', data.error || 'Failed to revoke license', 'error');
+                }
+            } catch (error) {
+                showMessage('revokeResult', 'Error: ' + error.message, 'error');
+            }
+        }
+        
+        function displayLicense(license, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = createLicenseCard(license);
+        }
+        
+        function createLicenseCard(license) {
+            const status = license.activated ? 'active' : 'pending';
+            const statusText = license.activated ? 'Active' : 'Pending';
+            const expiry = license.expiry ? new Date(license.expiry).toLocaleDateString() : 'Unknown';
+            
+            return `
+                <div class="license-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>${license.email}</h3>
+                        <span class="status ${status}">${statusText}</span>
+                    </div>
+                    <div class="license-type">${license.productType || 'Unknown Type'}</div>
+                    <div class="expiry-date">Expires: ${expiry}</div>
+                    <div class="license-key">${license.licenseKey}</div>
+                    <button class="copy-btn" onclick="copyToClipboard('${license.licenseKey}')">Copy License Key</button>
+                    <div class="actions">
+                        <small>Created: ${new Date(license.createdAt).toLocaleString()}</small>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('License key copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('License key copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
+
