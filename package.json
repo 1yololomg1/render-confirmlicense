@@ -3,6 +3,8 @@
        "type": "module",
        "dependencies": {
          "express": "^4.19.2",
-         "firebase-admin": "^12.1.0"
+         "firebase-admin": "^12.1.0",
+         "stripe": "^14.21.0",
+         "@sendgrid/mail": "^8.1.0"
        }
      }
