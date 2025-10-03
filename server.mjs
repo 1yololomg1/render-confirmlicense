@@ -520,6 +520,39 @@ app.get('/admin', (req, res) => {
   <h1>CONFIRM License Administration</h1>
   
   <div class="section">
+    <h2>Create New License</h2>
+    <div style="margin-bottom: 15px;">
+      <label>Customer Email:</label><br>
+      <input type="email" id="createEmailInput" placeholder="customer@example.com" style="width: 100%; margin-top: 5px;">
+    </div>
+    <div style="margin-bottom: 15px;">
+      <label>Product Type:</label><br>
+      <select id="productTypeSelect" style="width: 100%; padding: 10px; font-size: 16px; margin-top: 5px;">
+        <option value="student">Student</option>
+        <option value="startup">Startup</option>
+        <option value="professional" selected>Professional</option>
+        <option value="enterprise">Enterprise</option>
+        <option value="integration">Integration</option>
+        <option value="whitelabel">White-label</option>
+      </select>
+    </div>
+    <div style="margin-bottom: 15px;">
+      <label>Duration (days):</label><br>
+      <input type="number" id="durationInput" value="365" min="1" max="3650" style="width: 100%; margin-top: 5px;">
+    </div>
+    <div style="margin-bottom: 15px;">
+      <label>Machine ID (optional):</label><br>
+      <input type="text" id="machineIdInput" placeholder="Leave empty for any machine" style="width: 100%; margin-top: 5px;">
+    </div>
+    <div style="margin-bottom: 15px;">
+      <label>Notes (optional):</label><br>
+      <textarea id="notesInput" placeholder="Additional notes..." style="width: 100%; height: 60px; margin-top: 5px; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+    </div>
+    <button onclick="createLicense()">Create License</button>
+    <div id="createResult"></div>
+  </div>
+  
+  <div class="section">
     <h2>Look Up License by Email</h2>
     <input type="email" id="emailInput" placeholder="customer@example.com">
     <button onclick="lookupEmail()">Look Up</button>
@@ -545,6 +578,57 @@ app.get('/admin', (req, res) => {
       navigator.clipboard.writeText(text).then(() => {
         alert('License key copied to clipboard!');
       });
+    }
+    
+    async function createLicense() {
+      const email = document.getElementById('createEmailInput').value;
+      const productType = document.getElementById('productTypeSelect').value;
+      const durationDays = parseInt(document.getElementById('durationInput').value);
+      const machineId = document.getElementById('machineIdInput').value;
+      const notes = document.getElementById('notesInput').value;
+      
+      if (!email) {
+        alert('Please enter an email');
+        return;
+      }
+      
+      const result = document.getElementById('createResult');
+      result.innerHTML = '<p>Creating license...</p>';
+      
+      try {
+        const response = await fetch('/admin/create-license', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-app-secret': SECRET
+          },
+          body: JSON.stringify({
+            email,
+            productType,
+            durationDays,
+            machineId: machineId || null,
+            notes: notes || null
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          result.innerHTML = '<p class="error">Error: ' + data.error + '</p>';
+        } else {
+          result.innerHTML = '<div class="license">' +
+            '<p class="success">License created successfully!</p>' +
+            '<strong>Email:</strong> ' + data.email + '<br>' +
+            '<strong>Product:</strong> ' + data.productType + '<br>' +
+            '<strong>License Key:</strong><br>' +
+            '<span class="key">' + data.licenseKey + '</span><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.licenseKey + '\')">Copy Key</button><br>' +
+            '<strong>Expires:</strong> ' + new Date(data.expiresAt).toLocaleDateString() + '<br>' +
+            '</div>';
+        }
+      } catch (err) {
+        result.innerHTML = '<p class="error">Error: ' + err.message + '</p>';
+      }
     }
     
     async function lookupEmail() {
