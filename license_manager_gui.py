@@ -24,9 +24,10 @@ class LicenseManagerGUI:
         self.root.configure(bg='#f8f9fa')
         
         # API Configuration - using your existing endpoints
-        self.api_base_url = "https://your-app-name.onrender.com"  # Update with your actual Render app URL
+        self.api_base_url = "https://render-confirmlicense.onrender.com"  # Update with your actual Render app URL
         self.admin_key = None
         self.licenses_data = []
+        self.local_mode = True  # Enable local testing mode
         
         # Create the interface
         self.create_widgets()

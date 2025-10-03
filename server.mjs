@@ -357,9 +357,6 @@ app.post('/admin/revoke-license', async (req, res) => {
 
 // ACTIVATE LICENSE
 app.post('/activate', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
   
   const { license_key, machine_id, email } = req.body;
   
@@ -410,9 +407,6 @@ app.post('/activate', async (req, res) => {
 
 // VALIDATE LICENSE
 app.post('/validate', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
   
   const { license_key, machine_id } = req.body;
   
@@ -431,12 +425,19 @@ app.post('/validate', async (req, res) => {
   
   const data = doc.data();
   
-  if (!data.activated) {
-    return res.status(403).json({ error: 'License not activated' });
+  // Check if license is revoked
+  if (data.revoked) {
+    return res.status(403).json({ error: 'License has been revoked' });
   }
   
-  if (data.machineId !== machine_id) {
-    return res.status(403).json({ error: 'Machine mismatch' });
+  // Check if license requires approval and is not approved
+  if (data.requiresApproval && !data.manuallyApproved) {
+    return res.status(403).json({ error: 'License pending approval' });
+  }
+  
+  // If activated, check machine ID matches
+  if (data.activated && data.machineId !== machine_id) {
+    return res.status(403).json({ error: 'License already activated on different machine' });
   }
   
   if (new Date() > new Date(expiry)) {

@@ -14,7 +14,7 @@ def setup_environment():
     print("=" * 40)
     
     # Get API URL
-    api_url = input("Enter your Render app URL (e.g., https://your-app-name.onrender.com): ").strip()
+    api_url = input("Enter API URL (e.g., https://render-confirmlicense.onrender.com): ").strip()
     if not api_url:
         print("Error: API URL is required")
         return False
@@ -25,7 +25,7 @@ def setup_environment():
         print(f"Removed /api suffix, using: {api_url}")
     
     # Get admin key
-    admin_key = input("Enter your admin secret key (from your server.mjs SHARED_SECRET): ").strip()
+    admin_key = input("Enter admin secret key: ").strip()
     if not admin_key:
         print("Error: Admin key is required")
         return False
@@ -73,10 +73,10 @@ def check_dependencies():
                 import requests
             elif package == 'pathlib':
                 import pathlib
-            print(f"✓ {package}")
+            print(f"OK {package}")
         except ImportError:
             missing_packages.append(package)
-            print(f"✗ {package} - MISSING")
+            print(f"ERROR {package} - MISSING")
     
     if missing_packages:
         print(f"\nMissing packages: {', '.join(missing_packages)}")
@@ -97,13 +97,13 @@ def test_api_connection():
         # Test with a simple request
         response = requests.get(config.API_BASE_URL.replace('/api', ''), timeout=10)
         if response.status_code == 200:
-            print("✓ API connection successful")
+            print("OK API connection successful")
             return True
         else:
-            print(f"✗ API returned status code: {response.status_code}")
+            print(f"ERROR API returned status code: {response.status_code}")
             return False
     except Exception as e:
-        print(f"✗ API connection failed: {str(e)}")
+        print(f"ERROR API connection failed: {str(e)}")
         return False
 
 def create_desktop_shortcut():
@@ -147,10 +147,10 @@ Categories=Office;
             
             # Make executable
             os.chmod(desktop_file, 0o755)
-            print("✓ Desktop shortcut created")
+            print("OK Desktop shortcut created")
             
     except Exception as e:
-        print(f"✗ Could not create desktop shortcut: {str(e)}")
+        print(f"ERROR Could not create desktop shortcut: {str(e)}")
 
 def main():
     """Main setup function"""
