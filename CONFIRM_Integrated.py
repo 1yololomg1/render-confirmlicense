@@ -166,6 +166,12 @@ def check_license_with_fingerprint(license_key):
             logger.error(f"Server error: {response.status_code}")
             return {'valid': False, 'reason': f'Server error: {response.status_code}'}
             
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error during license validation: {e}")
+        return {'valid': False, 'reason': 'Cannot connect to license server. Please check your internet connection.'}
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout error during license validation: {e}")
+        return {'valid': False, 'reason': 'License server timeout. Please try again.'}
     except Exception as e:
         logger.error(f"Network error during license validation: {e}")
         return {'valid': False, 'reason': f'Network error: {str(e)}'}
@@ -196,6 +202,12 @@ def bind_license_to_computer(license_key, computer_id, email):
             logger.error(f"Server error: {response.status_code}")
             return False, f"Server error: {response.status_code}"
             
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error during license binding: {e}")
+        return False, "Cannot connect to license server. Please check your internet connection."
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout error during license binding: {e}")
+        return False, "License server timeout. Please try again."
     except Exception as e:
         logger.error(f"Network error during license binding: {e}")
         return False, f"Network error: {str(e)}"

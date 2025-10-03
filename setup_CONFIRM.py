@@ -15,7 +15,7 @@ def check_python_version():
         print("Error: Python 3.7 or higher is required")
         print(f"Current version: {sys.version}")
         return False
-    print(f"✓ Python version: {sys.version.split()[0]}")
+    print(f"OK Python version: {sys.version.split()[0]}")
     return True
 
 def install_dependencies():
@@ -37,9 +37,9 @@ def install_dependencies():
         try:
             print(f"Installing {package}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            print(f"✓ {package} installed successfully")
+            print(f"OK {package} installed successfully")
         except subprocess.CalledProcessError as e:
-            print(f"✗ Failed to install {package}: {e}")
+            print(f"ERROR Failed to install {package}: {e}")
             return False
     
     return True
@@ -61,11 +61,11 @@ pause
         with open(batch_file, 'w') as f:
             f.write(batch_content)
         
-        print(f"✓ Created run_CONFIRM.bat in {Path.cwd()}")
+        print(f"OK Created run_CONFIRM.bat in {Path.cwd()}")
         print(f"  You can double-click this file to run CONFIRM")
         
     except Exception as e:
-        print(f"✗ Could not create shortcut: {e}")
+        print(f"ERROR Could not create shortcut: {e}")
 
 def test_license_server():
     """Test connection to license server"""
@@ -73,13 +73,13 @@ def test_license_server():
         import requests
         response = requests.get("https://render-confirmlicense.onrender.com", timeout=10)
         if response.status_code == 200:
-            print("✓ License server is accessible")
+            print("OK License server is accessible")
             return True
         else:
-            print(f"✗ License server returned status: {response.status_code}")
+            print(f"ERROR License server returned status: {response.status_code}")
             return False
     except Exception as e:
-        print(f"✗ Cannot connect to license server: {e}")
+        print(f"ERROR Cannot connect to license server: {e}")
         return False
 
 def main():
