@@ -1,0 +1,22 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview covering the license management architecture, key components, and their interactions"
+  },
+  {
+    "fileName": "license-data-models.mdc",
+    "description": "Detailed documentation of license types, their attributes, states, and relationships with hardware fingerprints and user accounts"
+  },
+  {
+    "fileName": "hardware-fingerprinting-algorithms.mdc",
+    "description": "Technical details of the hardware fingerprinting algorithms, including CPU ID, motherboard serial, and MAC address collection and hashing"
+  },
+  {
+    "fileName": "license-validation-flow.mdc",
+    "description": "Comprehensive documentation of the multi-step license validation process, including local cache verification, hardware binding, and server-side validation"
+  },
+  {
+    "fileName": "component-data-flow.mdc",
+    "description": "Detailed mapping of data flow between client-side validation, server-side management, and license state transitions"
+  }
+]

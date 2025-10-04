@@ -572,7 +572,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <script>
-    const SECRET = '${sharedSecret}';
+    const SECRET = ${JSON.stringify(sharedSecret)};
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
@@ -618,12 +618,12 @@ app.get('/admin', (req, res) => {
         } else {
           result.innerHTML = '<div class="license">' +
             '<p class="success">License created successfully!</p>' +
-            '<strong>Email:</strong> ' + data.email + '<br>' +
-            '<strong>Product:</strong> ' + data.productType + '<br>' +
+            '<strong>Email:</strong> ' + data.license.email + '<br>' +
+            '<strong>Product:</strong> ' + data.license.productType + '<br>' +
             '<strong>License Key:</strong><br>' +
-            '<span class="key">' + data.licenseKey + '</span><br>' +
-            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.licenseKey + '\')">Copy Key</button><br>' +
-            '<strong>Expires:</strong> ' + new Date(data.expiresAt).toLocaleDateString() + '<br>' +
+            '<span class="key">' + data.license.licenseKey + '</span><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.license.licenseKey + '\')">Copy Key</button><br>' +
+            '<strong>Expires:</strong> ' + new Date(data.license.expiry).toLocaleDateString() + '<br>' +
             '</div>';
         }
       } catch (err) {
