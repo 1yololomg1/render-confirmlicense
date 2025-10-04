@@ -3,7 +3,7 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import Stripe from "stripe";
 import sgMail from "@sendgrid/mail";
-import { getConfig } from "./config.js";
+// Configuration loaded directly from environment variables
 
 const app = express();
 
@@ -30,10 +30,9 @@ const db = admin.firestore();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// Load configuration
-const config = getConfig();
-const sharedSecret = config.SHARED_SECRET;
-const LICENSE_SECRET = config.LICENSE_SECRET;
+// Load configuration from environment variables
+const sharedSecret = process.env.SHARED_SECRET;
+const LICENSE_SECRET = process.env.LICENSE_SECRET;
 
 console.log(`Using admin secret: ${sharedSecret.substring(0, 8)}...`);
 console.log(`Using license secret: ${LICENSE_SECRET.substring(0, 8)}...`);
