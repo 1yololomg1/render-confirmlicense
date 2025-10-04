@@ -15,6 +15,7 @@ import hashlib
 import platform
 import subprocess
 import re
+import os
 
 class LicenseManagerGUI:
     def __init__(self, root):
@@ -23,9 +24,9 @@ class LicenseManagerGUI:
         self.root.geometry("1200x800")
         self.root.configure(bg='#f8f9fa')
         
-        # API Configuration - using your existing endpoints
-        self.api_base_url = "https://render-confirmlicense.onrender.com"  # Update with your actual Render app URL
-        self.admin_key = None
+        # API Configuration - load from environment or config
+        self.api_base_url = os.getenv('LICENSE_API_URL', 'http://localhost:3000')
+        self.admin_key = os.getenv('ADMIN_SECRET_KEY')
         self.licenses_data = []
         self.local_mode = True  # Enable local testing mode
         

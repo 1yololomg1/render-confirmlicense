@@ -41,15 +41,8 @@ ADMIN_SECRET_KEY={admin_key}
     
     print("\nConfiguration saved to .env file")
     
-    # Update the GUI config
-    try:
-        from license_manager_config import config
-        config.API_BASE_URL = api_url
-        config.ADMIN_KEY = admin_key
-        config.save_config()
-        print("Configuration updated successfully")
-    except ImportError:
-        print("Warning: Could not update GUI configuration")
+    # Configuration is now handled via environment variables
+    print("Configuration will be loaded from .env file")
     
     return True
 
@@ -91,11 +84,21 @@ def test_api_connection():
     print("\nTesting API connection...")
     
     try:
-        from license_manager_config import config
         import requests
         
+        # Load API URL from .env file or use default
+        api_url = "http://localhost:3000"  # Default fallback
+        try:
+            with open('.env', 'r') as f:
+                for line in f:
+                    if line.startswith('LICENSE_API_URL='):
+                        api_url = line.split('=', 1)[1].strip()
+                        break
+        except FileNotFoundError:
+            pass
+        
         # Test with a simple request
-        response = requests.get(config.API_BASE_URL.replace('/api', ''), timeout=10)
+        response = requests.get(api_url, timeout=10)
         if response.status_code == 200:
             print("OK API connection successful")
             return True
