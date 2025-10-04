@@ -272,3 +272,5 @@ OR
 1. **You create license** → **Send to customer** → **Customer activates** → **CONFIRM works**
 
 **The entire system is built and ready - you just need to deploy the server!**
+
+
