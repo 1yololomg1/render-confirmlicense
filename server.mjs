@@ -572,7 +572,7 @@ app.get('/admin', (req, res) => {
 
   <script>
     try {
-      const SECRET = "${(sharedSecret || 'default-secret-2024').replace(/"/g, '\\"').replace(/'/g, "\\'")}";
+      const SECRET = 'confirm-admin-secret-2024';
       
       console.log('Admin panel JavaScript loaded successfully');
       console.log('SECRET loaded:', SECRET ? 'Yes' : 'No');
