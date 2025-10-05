@@ -621,7 +621,7 @@ app.get('/admin', (req, res) => {
             '<strong>Product:</strong> ' + data.license.productType + '<br>' +
             '<strong>License Key:</strong><br>' +
             '<span class="key">' + data.license.licenseKey + '</span><br>' +
-            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.license.licenseKey.replace(/'/g, "\\'") + '\')">Copy Key</button><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.license.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
             '<strong>Expires:</strong> ' + new Date(data.license.expiry).toLocaleDateString() + '<br>' +
             '</div>';
         }
@@ -660,7 +660,7 @@ app.get('/admin', (req, res) => {
             '<strong>Product:</strong> ' + data.productType + '<br>' +
             '<strong>License Key:</strong><br>' +
             '<span class="key">' + data.licenseKey + '</span><br>' +
-            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.licenseKey.replace(/'/g, "\\'") + '\')">Copy Key</button><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
             '<strong>Created:</strong> ' + new Date(data.createdAt).toLocaleString() + '<br>' +
             '<strong>Expires:</strong> ' + new Date(data.expiry).toLocaleDateString() + '<br>' +
             '<strong>Activated:</strong> ' + (data.activated ? 'Yes' : 'No') +
@@ -691,7 +691,7 @@ app.get('/admin', (req, res) => {
               '<strong>Email:</strong> ' + lic.email + '<br>' +
               '<strong>Product:</strong> ' + lic.productType + '<br>' +
               '<span class="key">' + lic.licenseKey + '</span><br>' +
-              '<button class="copy-btn" onclick="copyToClipboard(\'' + lic.licenseKey.replace(/'/g, "\\'") + '\')">Copy Key</button><br>' +
+              '<button class="copy-btn" onclick="copyToClipboard(\'' + lic.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
               '<strong>Created:</strong> ' + new Date(lic.createdAt).toLocaleString() +
               '</div>';
           });
