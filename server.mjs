@@ -806,7 +806,6 @@ app.post('/admin/lookup-email', async (req, res) => {
     
     const snapshot = await db.collection('licenses')
       .where('email', '==', email)
-      .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
     
@@ -830,7 +829,6 @@ app.get('/admin/pending-licenses', async (req, res) => {
     
     const snapshot = await db.collection('licenses')
       .where('activated', '==', false)
-      .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
     
