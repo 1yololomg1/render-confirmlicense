@@ -623,9 +623,10 @@ app.get('/admin', (req, res) => {
 
   <script>
     // Use the correct admin secret - must match server SHARED_SECRET
-    const SECRET = '${sharedSecret || 'default-admin-secret'}';  // This injects the actual server secret
+    const SECRET = '${sharedSecret || "default-admin-secret"}';  // This injects the actual server secret
     
     console.log('Admin panel loaded');
+    console.log('SECRET value:', SECRET);
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
