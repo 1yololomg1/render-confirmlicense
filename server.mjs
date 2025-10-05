@@ -622,11 +622,10 @@ app.get('/admin', (req, res) => {
   </div>
 
   <script>
-    try {
-      const SECRET = 'confirm-admin-secret-2024';
-      
-      console.log('Admin panel JavaScript loaded successfully');
-      console.log('SECRET loaded:', SECRET ? 'Yes' : 'No');
+    // Use the correct admin secret - must match server SHARED_SECRET
+    const SECRET = '${sharedSecret}';  // This injects the actual server secret
+    
+    console.log('Admin panel loaded');
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
@@ -638,7 +637,6 @@ app.get('/admin', (req, res) => {
       const email = document.getElementById('createEmailInput').value;
       const productType = document.getElementById('productTypeSelect').value;
       const durationDays = parseInt(document.getElementById('durationInput').value);
-      const machineId = document.getElementById('machineIdInput').value;
       const notes = document.getElementById('notesInput').value;
       
       if (!email) {
@@ -660,7 +658,6 @@ app.get('/admin', (req, res) => {
             email,
             productType,
             durationDays,
-            machineId: machineId || null,
             notes: notes || null
           })
         });
@@ -676,7 +673,7 @@ app.get('/admin', (req, res) => {
             '<strong>Product:</strong> ' + data.license.productType + '<br>' +
             '<strong>License Key:</strong><br>' +
             '<span class="key">' + data.license.licenseKey + '</span><br>' +
-            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.license.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\\'' + data.license.licenseKey + '\\')">Copy Key</button><br>' +
             '<strong>Expires:</strong> ' + new Date(data.license.expiry).toLocaleDateString() + '<br>' +
             '</div>';
         }
@@ -715,7 +712,7 @@ app.get('/admin', (req, res) => {
             '<strong>Product:</strong> ' + data.productType + '<br>' +
             '<strong>License Key:</strong><br>' +
             '<span class="key">' + data.licenseKey + '</span><br>' +
-            '<button class="copy-btn" onclick="copyToClipboard(\'' + data.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
+            '<button class="copy-btn" onclick="copyToClipboard(\\'' + data.licenseKey + '\\')">Copy Key</button><br>' +
             '<strong>Created:</strong> ' + new Date(data.createdAt).toLocaleString() + '<br>' +
             '<strong>Expires:</strong> ' + new Date(data.expiry).toLocaleDateString() + '<br>' +
             '<strong>Activated:</strong> ' + (data.activated ? 'Yes' : 'No') +
@@ -746,7 +743,7 @@ app.get('/admin', (req, res) => {
               '<strong>Email:</strong> ' + lic.email + '<br>' +
               '<strong>Product:</strong> ' + lic.productType + '<br>' +
               '<span class="key">' + lic.licenseKey + '</span><br>' +
-              '<button class="copy-btn" onclick="copyToClipboard(\'' + lic.licenseKey.replace(/'/g, "\\\\'") + '\')">Copy Key</button><br>' +
+              '<button class="copy-btn" onclick="copyToClipboard(\\'' + lic.licenseKey + '\\')">Copy Key</button><br>' +
               '<strong>Created:</strong> ' + new Date(lic.createdAt).toLocaleString() +
               '</div>';
           });
@@ -785,10 +782,6 @@ app.get('/admin', (req, res) => {
       } catch (err) {
         result.innerHTML = '<p class="error">Error: ' + err.message + '</p>';
       }
-    }
-    } catch (error) {
-      console.error('JavaScript error:', error);
-      alert('JavaScript error: ' + error.message);
     }
   </script>
 </body>
