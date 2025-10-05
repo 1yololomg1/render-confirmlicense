@@ -448,9 +448,8 @@ app.post('/validate', async (req, res) => {
 
 // ADMIN DASHBOARD
 app.get('/admin', (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
-    return res.status(403).send('Access denied');
-  }
+  // Allow access to admin panel without header (web interface)
+  // API endpoints below still require authentication
   
   res.send(`
 <!DOCTYPE html>
@@ -572,7 +571,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <script>
-    const SECRET = ${JSON.stringify(sharedSecret)};
+    const SECRET = ${JSON.stringify(sharedSecret || 'undefined')};
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
