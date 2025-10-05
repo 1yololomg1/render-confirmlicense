@@ -85,8 +85,9 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const sharedSecret = process.env.SHARED_SECRET;
 const LICENSE_SECRET = process.env.LICENSE_SECRET;
 
-console.log(`Using admin secret: ${sharedSecret.substring(0, 8)}...`);
-console.log(`Using license secret: ${LICENSE_SECRET.substring(0, 8)}...`);
+console.log(`Using admin secret: ${sharedSecret?.substring(0, 8)}...`);
+console.log(`Using license secret: ${LICENSE_SECRET?.substring(0, 8)}...`);
+console.log('Firebase initialized:', !!db);
 
 // Pricing tiers configuration
 const PRICING_TIERS = {
