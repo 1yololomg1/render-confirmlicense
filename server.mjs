@@ -27,7 +27,7 @@ app.use((req, res, next) => {
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
-    "font-src 'self' https:; " +
+    "font-src 'self' data: https:; " +
     "connect-src 'self'; " +
     "frame-ancestors 'none'; " +
     "base-uri 'self'; " +
