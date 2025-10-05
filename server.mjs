@@ -281,7 +281,7 @@ deltaV solutions`,
 
 // MANUAL APPROVAL - for cases where you need to verify before activation
 app.post('/admin/approve-license', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -304,7 +304,7 @@ app.post('/admin/approve-license', async (req, res) => {
 
 // MANUAL LICENSE CREATION - for admin-created licenses
 app.post('/admin/create-license', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -357,7 +357,7 @@ app.post('/admin/create-license', async (req, res) => {
 
 // LICENSE REVOCATION - revoke a license
 app.post('/admin/revoke-license', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -623,7 +623,7 @@ app.get('/admin', (req, res) => {
 
   <script>
     // Use the correct admin secret - must match server SHARED_SECRET
-    const SECRET = '${sharedSecret}';  // This injects the actual server secret
+    const SECRET = '${sharedSecret || 'default-admin-secret'}';  // This injects the actual server secret
     
     console.log('Admin panel loaded');
     
@@ -791,7 +791,7 @@ app.get('/admin', (req, res) => {
 
 // Admin API endpoints
 app.post('/admin/lookup-email', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -812,7 +812,7 @@ app.post('/admin/lookup-email', async (req, res) => {
 });
 
 app.get('/admin/pending-licenses', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -829,7 +829,7 @@ app.get('/admin/pending-licenses', async (req, res) => {
 });
 
 app.get('/admin/recent-licenses', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
@@ -848,7 +848,7 @@ app.get('/admin/recent-licenses', async (req, res) => {
 
 // SEARCH LICENSE BY ID - for revocation
 app.post('/admin/search-license', async (req, res) => {
-  if (req.get('x-app-secret') !== sharedSecret) {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   
