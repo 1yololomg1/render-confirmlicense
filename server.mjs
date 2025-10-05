@@ -7,6 +7,57 @@ import sgMail from "@sendgrid/mail";
 
 const app = express();
 
+// Security Headers Middleware
+app.use((req, res, next) => {
+  // Prevent XSS attacks
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' https:; " +
+    "connect-src 'self'; " +
+    "frame-ancestors 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'"
+  );
+  
+  // Feature Policy
+  res.setHeader('Permissions-Policy', 
+    'geolocation=(), ' +
+    'microphone=(), ' +
+    'camera=(), ' +
+    'payment=(), ' +
+    'usb=(), ' +
+    'magnetometer=(), ' +
+    'gyroscope=(), ' +
+    'speaker=()'
+  );
+  
+  // Expect Certificate Transparency
+  res.setHeader('Expect-CT', 'max-age=86400, enforce');
+  
+  // Strict Transport Security (HTTPS only)
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  
+  // Remove X-Powered-By header
+  res.removeHeader('X-Powered-By');
+  
+  next();
+});
+
 // Initialize Firebase
 const serviceAccount = {
   type: process.env.type,
@@ -870,6 +921,11 @@ app.post('/test-auth', (req, res) => {
   };
   
   res.json(result);
+});
+
+// Favicon route to prevent 404 errors
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No content
 });
 
 app.get('/', (req, res) => res.send('CONFIRM License Server Running'));
