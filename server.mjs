@@ -316,6 +316,15 @@ app.post('/admin/create-license', async (req, res) => {
   }
   
   try {
+    // Check if email already has a license
+    const existingSnapshot = await db.collection('licenses')
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+    
+    if (!existingSnapshot.empty) {
+      return res.status(400).json({ error: 'Email already has an existing license. Use the lookup feature to find it.' });
+    }
     // Generate license
     const { licenseKey, licenseId, expiry } = generateLicense(email, durationDays);
     
