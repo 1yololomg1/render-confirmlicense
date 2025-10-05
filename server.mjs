@@ -623,7 +623,7 @@ app.get('/admin', (req, res) => {
 
   <script>
     // Use the correct admin secret - must match server SHARED_SECRET
-    const SECRET = '${sharedSecret || "default-admin-secret"}';  // This injects the actual server secret
+    const SECRET = ${JSON.stringify(sharedSecret || 'default-admin-secret')};  // This injects the actual server secret
     
     console.log('Admin panel loaded');
     console.log('SECRET value:', SECRET);
@@ -792,41 +792,55 @@ app.get('/admin', (req, res) => {
 
 // Admin API endpoints
 app.post('/admin/lookup-email', async (req, res) => {
-  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
-    return res.status(403).json({ error: 'Forbidden' });
+  try {
+    if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const snapshot = await db.collection('licenses')
+      .where('email', '==', email)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+    
+    if (snapshot.empty) {
+      return res.json({ error: 'No license found for this email' });
+    }
+    
+    const data = snapshot.docs[0].data();
+    res.json(data);
+  } catch (error) {
+    console.error('Error in lookup-email:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  
-  const { email } = req.body;
-  
-  const snapshot = await db.collection('licenses')
-    .where('email', '==', email)
-    .orderBy('createdAt', 'desc')
-    .limit(1)
-    .get();
-  
-  if (snapshot.empty) {
-    return res.json({ error: 'No license found for this email' });
-  }
-  
-  const data = snapshot.docs[0].data();
-  res.json(data);
 });
 
 app.get('/admin/pending-licenses', async (req, res) => {
-  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
-    return res.status(403).json({ error: 'Forbidden' });
+  try {
+    if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const snapshot = await db.collection('licenses')
+      .where('activated', '==', false)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+    
+    const licenses = [];
+    snapshot.forEach(doc => licenses.push(doc.data()));
+    
+    res.json({ licenses });
+  } catch (error) {
+    console.error('Error in pending-licenses:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  
-  const snapshot = await db.collection('licenses')
-    .where('activated', '==', false)
-    .orderBy('createdAt', 'desc')
-    .limit(20)
-    .get();
-  
-  const licenses = [];
-  snapshot.forEach(doc => licenses.push(doc.data()));
-  
-  res.json({ licenses });
 });
 
 app.get('/admin/recent-licenses', async (req, res) => {
