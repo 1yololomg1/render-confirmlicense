@@ -571,7 +571,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <script>
-    const SECRET = '${(sharedSecret || 'undefined').replace(/'/g, "\\'")}';
+    const SECRET = "${(sharedSecret || 'undefined').replace(/"/g, '\\"').replace(/'/g, "\\'")}";
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
