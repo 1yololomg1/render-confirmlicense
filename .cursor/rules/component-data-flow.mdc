@@ -1,4 +1,9 @@
 ---
+description: Maps data flow and state transitions between client validation, server management and license states
+---
+
+# === USER INSTRUCTIONS ===
+---
 description: Detailed documentation of data flow between client-side validation and server-side license management components
 ---
 
@@ -46,6 +51,85 @@ Importance Score: 75/100
 - Server pushes state changes on validation
 - Expiration handling coordinated between components
 - Revocation immediately propagated to all instances
+
+$END$
+
+ If you're using this file in context, clearly say in italics in one small line that "Context added by Giga component-data-flow" along with specifying exactly what information was used from this file in a human-friendly way, instead of using kebab-case use normal sentence case.
+# === END USER INSTRUCTIONS ===
+
+# Component Data Flow
+
+## License State Flow (Importance: 85/100)
+
+Primary flow between components:
+1. Client-side hardware fingerprinting (`CONFIRM_Integrated.py`)
+   - Collects hardware identifiers
+   - Bundles into fingerprint package
+   - Encrypts for transmission
+
+2. Server validation (`server.mjs`)
+   - Receives fingerprint package
+   - Validates against stored licenses
+   - Returns activation status
+   - Updates license state
+
+3. Client activation (`CONFIRM_Integrated.py`)
+   - Stores encrypted activation token
+   - Manages offline grace period
+   - Handles revalidation cycles
+
+## License State Transitions
+
+1. Purchase → Created
+   - Payment verification
+   - License generation
+   - Initial state recording
+
+2. Created → Pending Activation
+   - License key distribution
+   - Hardware binding request
+   - Temporary access grant
+
+3. Pending → Hardware Bound
+   - Fingerprint validation
+   - Machine binding
+   - Activation token generation
+
+4. Hardware Bound → Active
+   - Final validation check
+   - Feature enablement
+   - Usage tracking start
+
+5. Active → Expired/Revoked
+   - Time-based expiration
+   - Manual revocation
+   - Grace period management
+
+## Data Exchange Points
+
+1. Hardware Fingerprint Flow
+   ```
+   Client → Server
+   - Hardware identifiers
+   - Current license state
+   - Usage metrics
+   ```
+
+2. Validation Response Flow
+   ```
+   Server → Client
+   - Activation status
+   - License parameters
+   - Feature flags
+   ```
+
+3. State Update Flow
+   ```
+   Server → Database
+   - License status changes
+   - Binding records
+   - Usage history
+   ```
 
 $END$
 
