@@ -571,7 +571,11 @@ app.get('/admin', (req, res) => {
   </div>
 
   <script>
-    const SECRET = "${(sharedSecret || 'undefined').replace(/"/g, '\\"').replace(/'/g, "\\'")}";
+    try {
+      const SECRET = "${(sharedSecret || 'default-secret-2024').replace(/"/g, '\\"').replace(/'/g, "\\'")}";
+      
+      console.log('Admin panel JavaScript loaded successfully');
+      console.log('SECRET loaded:', SECRET ? 'Yes' : 'No');
     
     function copyToClipboard(text) {
       navigator.clipboard.writeText(text).then(() => {
@@ -730,6 +734,10 @@ app.get('/admin', (req, res) => {
       } catch (err) {
         result.innerHTML = '<p class="error">Error: ' + err.message + '</p>';
       }
+    }
+    } catch (error) {
+      console.error('JavaScript error:', error);
+      alert('JavaScript error: ' + error.message);
     }
   </script>
 </body>
