@@ -16,6 +16,13 @@ import atexit
 import secrets
 from typing import Optional
 
+# Import commercial protection module
+try:
+    from protection_module import initialize_protection, cleanup_protection
+    PROTECTION_AVAILABLE = True
+except ImportError:
+    PROTECTION_AVAILABLE = False
+
 try:
     from cryptography.fernet import Fernet, InvalidToken
     _FERNET_AVAILABLE = True
@@ -1358,7 +1365,7 @@ Total Samples: {best_config['Total_Samples']:,}"""
         
         # Create treeview for better table display
         columns = ['Rank', 'Sheet', 'Classification Accuracy', 'Association Strength (Cramer\'s V)', 'Neuron Utilization', 'Samples']
-        tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=10)
+        tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=12)  # Increased height to show all rows
         
         for col in columns:
             tree.heading(col, text=col)
@@ -3873,8 +3880,13 @@ class StatisticalAnalyzer:
     def __init__(self, root):
         self.root = root
         self.root.title("Statistical Contingency Analysis Platform v1.0 - Ready")
-        self.root.geometry("2000x1000")  # Much wider to show all content without scrolling issues
+        # Let window size to content instead of fixed size
+        self.root.geometry("1800x900")  # Reasonable starting size
         self.root.configure(bg='#f5f5f5')
+        
+        # Allow window to resize to content
+        self.root.minsize(1200, 700)  # Minimum usable size
+        self.root.maxsize(2500, 1500)  # Maximum before it gets unwieldy
         
         # Data storage - removed redundant variables
         self.confusion_matrix = None
@@ -3910,8 +3922,9 @@ class StatisticalAnalyzer:
         self.setup_menu_bar()
         self.start_progress_monitor()
         
-        # Show initial ready state
+        # Show initial ready state and resize to content
         self.root.after(1000, lambda: self.show_ready_state())
+        self.root.after(1500, self.auto_resize_to_content)  # Auto-resize after UI is ready
     
     def ensure_project_directories(self):
         """Create project directories if they don't exist"""
@@ -3920,6 +3933,38 @@ class StatisticalAnalyzer:
             BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             pass
+    
+    def auto_resize_to_content(self):
+        """Automatically resize window to fit content optimally"""
+        try:
+            # Force update of all widgets to get accurate sizes
+            self.root.update_idletasks()
+            
+            # Get the actual content size needed
+            content_width = self.root.winfo_reqwidth()
+            content_height = self.root.winfo_reqheight()
+            
+            # Add some padding for window chrome (title bar, borders, etc.)
+            padding_width = 50
+            padding_height = 100
+            
+            # Calculate optimal window size
+            optimal_width = min(max(content_width + padding_width, 1200), 2500)
+            optimal_height = min(max(content_height + padding_height, 700), 1500)
+            
+            # Only resize if significantly different from current size
+            current_width = self.root.winfo_width()
+            current_height = self.root.winfo_height()
+            
+            width_diff = abs(optimal_width - current_width)
+            height_diff = abs(optimal_height - current_height)
+            
+            # Resize if difference is more than 50 pixels in either direction
+            if width_diff > 50 or height_diff > 50:
+                self.root.geometry(f"{optimal_width}x{optimal_height}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to auto-resize window: {e}")
     
     def process_data_placeholder(self):
         """Process single sheet analysis using unified batch architecture"""
@@ -4965,16 +5010,18 @@ class StatisticalAnalyzer:
         
         # Make the scrollable frame wider to enable horizontal scrolling
         def configure_scroll_region(event):
-            # Update scroll region to include extra width
             bbox = main_canvas.bbox("all")
             if bbox:
-                # Add extra width to enable horizontal scrolling
                 canvas_width = main_canvas.winfo_width()
+                canvas_height = main_canvas.winfo_height()
                 content_width = bbox[2] - bbox[0]
-                if content_width < canvas_width + 400:  # Add 400px extra width
-                    main_canvas.configure(scrollregion=(0, 0, canvas_width + 400, bbox[3] - bbox[1]))
-                else:
-                    main_canvas.configure(scrollregion=bbox)
+                content_height = bbox[3] - bbox[1]
+                
+                # Always ensure scrollable area is larger than canvas
+                scroll_width = max(content_width + 400, canvas_width + 400)
+                scroll_height = max(content_height + 100, canvas_height + 100)
+                
+                main_canvas.configure(scrollregion=(0, 0, scroll_width, scroll_height))
         
         scrollable_frame.bind("<Configure>", configure_scroll_region)
         
@@ -5569,9 +5616,12 @@ class StatisticalAnalyzer:
         data_frame = ttk.LabelFrame(parent, text="Confusion Matrix", padding="15")
         data_frame.pack(fill=tk.X)
         
-        # Create treeview with scrollbars - fixed height
+        # Create treeview with scrollbars - size to content, not full width
         tree_frame = ttk.Frame(data_frame, height=300)
-        tree_frame.pack(fill=tk.X)  # Fixed height, no expand
+        tree_frame.pack()  # Let it size to content instead of fill=tk.X
+        
+        # Configure the tree frame to allow proper column sizing
+        tree_frame.grid_columnconfigure(0, weight=1)
         
         self.tree = ttk.Treeview(tree_frame, show='tree headings', height=12)  # Fixed height
         
@@ -5580,13 +5630,13 @@ class StatisticalAnalyzer:
         h_scroll = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
         
-        # Grid layout for scrollbars
+        # Grid layout for scrollbars - tree sizes to content
         self.tree.grid(row=0, column=0, sticky='nsew')
         v_scroll.grid(row=0, column=1, sticky='ns')
         h_scroll.grid(row=1, column=0, sticky='ew')
         
         tree_frame.grid_rowconfigure(0, weight=1)
-        tree_frame.grid_columnconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=0)  # Don't expand tree columns unnecessarily
         
     def setup_qc_results_panel(self, parent):
         """Setup comprehensive QC Results & Sheet Comparison panel"""
@@ -5599,6 +5649,16 @@ class StatisticalAnalyzer:
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
+        
+        # ADD THESE LINES IMMEDIATELY AFTER:
+        def update_scroll():
+            canvas.update_idletasks()
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.yview_moveto(0)  # Reset to top
+
+        # Force initial scroll region update
+        canvas.after(100, update_scroll)
+        canvas.after(500, update_scroll)  # Second update for delayed content
         
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -5676,15 +5736,15 @@ class StatisticalAnalyzer:
         hint_frame = ttk.Frame(buttons_row)
         hint_frame.pack(fill=tk.X, pady=(0, 5))
         
-        hint_label = ttk.Label(hint_frame, text="💡 QC Controls Below ↓", 
+        hint_label = ttk.Label(hint_frame, text="Click buttons below to open analysis windows with charts and comparisons", 
                               font=('Arial', 9, 'italic'), foreground='#666666')
         hint_label.pack(anchor=tk.CENTER)
         
-        self.compare_high_btn = ttk.Button(buttons_row, text="Compare High Quality Sheets", 
+        self.compare_high_btn = ttk.Button(buttons_row, text="Open High-Quality Analysis Window", 
                                          command=self.launch_high_quality_comparison, state=tk.DISABLED)
         self.compare_high_btn.pack(side=tk.LEFT, padx=(0, 10))
         
-        self.compare_all_btn = ttk.Button(buttons_row, text="Compare All Sheets", 
+        self.compare_all_btn = ttk.Button(buttons_row, text="Open Full Analysis Window", 
                                         command=self.launch_all_comparison, state=tk.DISABLED)
         self.compare_all_btn.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -7611,7 +7671,7 @@ PERFORMANCE INTERPRETATION:
             self.tree.heading('#0', text=title)
             for col in matrix.columns:
                 self.tree.heading(col, text=str(col))
-                self.tree.column(col, width=100, anchor='center')
+                self.tree.column(col, width=120, anchor='center')  # Increased width to show all content
             
             # Add matrix data rows
             for idx in matrix.index:
@@ -7966,6 +8026,10 @@ PERFORMANCE INTERPRETATION:
             # Update comparison readiness status
             self.update_comparison_readiness()
             
+            # ADD THIS AT THE VERY END:
+            self.root.after(100, self.force_update_scroll_regions)
+            self.root.after(500, self.force_update_scroll_regions)
+            self.root.after(750, self.auto_resize_to_content)  # Auto-resize after content updates
         except Exception as e:
             logger.warning(f"Failed to update QC panel: {e}")
     
@@ -8166,6 +8230,9 @@ QUALITY DISTRIBUTION:
             # Create filtered batch results for high quality sheets only
             filtered_results = {sheet: self.batch_results[sheet] for sheet in high_quality_sheets if sheet in self.batch_results}
             
+            # Perform comparison analysis on high-quality sheets only
+            comparison_results = self.perform_comprehensive_comparison(filtered_results)
+            
             # Store original results and temporarily replace with filtered ones
             original_results = self.batch_results.copy()
             self.batch_results = filtered_results
@@ -8174,23 +8241,35 @@ QUALITY DISTRIBUTION:
             self.update_batch_results_display()
             self.update_qc_results_panel()
             
+            # Generate comparison summary for high-quality sheets
+            self.display_comparison_summary(comparison_results, "High-Quality Sheets")
+            
             # Open visualization window with filtered results
             self.open_visualization_window()
+            
+            # Show detailed comparison results
+            self.show_comparison_details(comparison_results, "High-Quality Analysis")
             
             # Restore original results after a delay to allow visualization to load
             self.root.after(5000, lambda: setattr(self, 'batch_results', original_results))
             
-            messagebox.showinfo("High-Quality Comparison Launched", 
-                              f"Comparison launched with {len(high_quality_sheets)} high-quality sheets only:\n\n" +
-                              f"• {', '.join(high_quality_sheets[:5])}\n" +
-                              (f"• ... and {len(high_quality_sheets)-5} more" if len(high_quality_sheets) > 5 else "") +
-                              "\n\nResults are now filtered to show only high-quality sheets.")
+            messagebox.showinfo("High-Quality Analysis Window Opened", 
+                              f"ANALYSIS WINDOW LAUNCHED!\n\n" +
+                              f"Filtered to show only {len(high_quality_sheets)} high-quality sheets\n" +
+                              f"Multiple analysis tabs now available:\n" +
+                              f"   - Performance comparisons\n" +
+                              f"   - Side-by-side visualizations\n" +
+                              f"   - Radar charts\n" +
+                              f"   - Statistical rankings\n\n" +
+                              f"High-Quality Sheets: {', '.join(high_quality_sheets[:3])}\n" +
+                              (f"   ... and {len(high_quality_sheets)-3} more" if len(high_quality_sheets) > 3 else "") +
+                              "\n\nCheck the analysis window for detailed comparisons!")
         
         except Exception as e:
             messagebox.showerror("Comparison Error", f"Failed to launch high quality comparison: {str(e)}")
     
     def launch_all_comparison(self):
-        """Launch comparison analysis for all available sheets"""
+        """Launch comprehensive comparison analysis for all available sheets"""
         try:
             readiness_status = self.get_comparison_readiness_status(self.batch_results)
             total_comparable = readiness_status['comparable_sheets']
@@ -8199,10 +8278,25 @@ QUALITY DISTRIBUTION:
                 messagebox.showwarning("Insufficient Data", "Need at least 2 sheets ready for comparison.")
                 return
             
+            # Perform actual comparison analysis
+            comparison_results = self.perform_comprehensive_comparison(self.batch_results)
+            
+            # Generate comparison summary in the main window
+            self.display_comparison_summary(comparison_results, "All Sheets")
+            
             # Open visualization window with all results
             self.open_visualization_window()
-            messagebox.showinfo("Comparison Launched", 
-                              f"Full comparison launched with {total_comparable} sheets.")
+            
+            # Show detailed comparison results
+            self.show_comparison_details(comparison_results, "All Sheets Analysis")
+            
+            messagebox.showinfo("Full Comparison Analysis Complete", 
+                              f"COMPREHENSIVE ANALYSIS COMPLETED!\n\n" +
+                              f"Analyzed {total_comparable} sheets\n" +
+                              f"Generated comparison rankings\n" +
+                              f"Performance metrics calculated\n" +
+                              f"Best configuration identified\n\n" +
+                              f"Check the analysis window for detailed charts and rankings!")
         
         except Exception as e:
             messagebox.showerror("Comparison Error", f"Failed to launch full comparison: {str(e)}")
@@ -8288,6 +8382,283 @@ QUALITY WARNINGS:
         """Refresh the QC analysis panel"""
         self.update_qc_results_panel()
         messagebox.showinfo("Refresh Complete", "QC analysis refreshed!")
+
+    def force_update_scroll_regions(self):
+        """Force update all scroll regions - call this after UI updates"""
+        try:
+            # Update main canvas
+            if hasattr(self, 'root'):
+                self.root.update_idletasks()
+                
+            # Find and update all canvas widgets
+            def update_canvas_recursive(widget):
+                for child in widget.winfo_children():
+                    if isinstance(child, tk.Canvas):
+                        try:
+                            bbox = child.bbox("all")
+                            if bbox and len(bbox) == 4:  # Ensure bbox is valid
+                                # Add generous padding
+                                width = bbox[2] - bbox[0] + 400
+                                height = bbox[3] - bbox[1] + 200
+                                child.configure(scrollregion=(0, 0, width, height))
+                        except:
+                            pass
+                    try:
+                        update_canvas_recursive(child)
+                    except:
+                        pass
+            
+            update_canvas_recursive(self.root)
+        except Exception as e:
+            logger.warning(f"Failed to update scroll regions: {e}")
+
+    def perform_comprehensive_comparison(self, batch_results):
+        """Perform comprehensive statistical comparison analysis"""
+        try:
+            if not batch_results or len(batch_results) < 2:
+                return None
+            
+            comparison_results = {
+                'total_sheets': len(batch_results),
+                'rankings': [],
+                'best_configuration': None,
+                'statistical_summary': {},
+                'performance_metrics': {}
+            }
+            
+            # Calculate performance metrics for each sheet
+            sheet_metrics = []
+            for sheet_name, result in batch_results.items():
+                if result.get('status') == 'success':
+                    stats = result.get('statistics', {})
+                    qc_summary = self.get_chi_square_qc_summary(result)
+                    
+                    metrics = {
+                        'sheet_name': sheet_name,
+                        'global_fit': stats.get('global_fit', 0),
+                        'cramers_v': stats.get('cramers_v', 0),
+                        'accuracy': qc_summary.get('accuracy_score', 0),
+                        'qc_grade': qc_summary.get('qc_grade', 'F'),
+                        'p_value': stats.get('p_value', 1),
+                        'sample_size': stats.get('sample_size', 0),
+                        'total_score': 0  # Will calculate below
+                    }
+                    
+                    # Calculate composite score (higher is better)
+                    metrics['total_score'] = (
+                        metrics['global_fit'] * 0.3 +  # 30% weight
+                        metrics['cramers_v'] * 100 * 0.25 +  # 25% weight (scaled up)
+                        metrics['accuracy'] * 0.25 +  # 25% weight
+                        (1 - metrics['p_value']) * 20 * 0.2  # 20% weight (lower p-value is better)
+                    )
+                    
+                    sheet_metrics.append(metrics)
+            
+            # Sort by total score (descending)
+            sheet_metrics.sort(key=lambda x: x['total_score'], reverse=True)
+            
+            # Generate rankings
+            for i, metrics in enumerate(sheet_metrics):
+                ranking = {
+                    'rank': i + 1,
+                    'sheet_name': metrics['sheet_name'],
+                    'total_score': round(metrics['total_score'], 2),
+                    'global_fit': round(metrics['global_fit'], 2),
+                    'cramers_v': round(metrics['cramers_v'], 3),
+                    'accuracy': round(metrics['accuracy'], 3),
+                    'qc_grade': metrics['qc_grade']
+                }
+                comparison_results['rankings'].append(ranking)
+            
+            # Set best configuration
+            if sheet_metrics:
+                comparison_results['best_configuration'] = {
+                    'sheet_name': sheet_metrics[0]['sheet_name'],
+                    'total_score': round(sheet_metrics[0]['total_score'], 2),
+                    'reason': f"Highest composite score based on global fit, accuracy, and statistical significance"
+                }
+            
+            # Calculate statistical summary
+            if sheet_metrics:
+                comparison_results['statistical_summary'] = {
+                    'average_score': round(sum(m['total_score'] for m in sheet_metrics) / len(sheet_metrics), 2),
+                    'score_range': round(max(m['total_score'] for m in sheet_metrics) - min(m['total_score'] for m in sheet_metrics), 2),
+                    'high_quality_count': len([m for m in sheet_metrics if m['qc_grade'] in ['A', 'B']]),
+                    'total_analyzed': len(sheet_metrics)
+                }
+            
+            return comparison_results
+            
+        except Exception as e:
+            logger.error(f"Failed to perform comprehensive comparison: {e}")
+            return None
+
+    def display_comparison_summary(self, comparison_results, analysis_type):
+        """Display comparison summary in a separate popup window instead of overwriting main results"""
+        try:
+            if not comparison_results:
+                return
+            
+            # Create a separate popup window for comparison results instead of overwriting main results
+            self.show_comparison_summary_popup(comparison_results, analysis_type)
+            
+        except Exception as e:
+            logger.error(f"Failed to display comparison summary: {e}")
+
+    def show_comparison_summary_popup(self, comparison_results, analysis_type):
+        """Show comparison summary in a popup window without affecting main results"""
+        try:
+            # Create popup window
+            summary_window = tk.Toplevel(self.root)
+            summary_window.title(f"Comparison Summary - {analysis_type}")
+            summary_window.geometry("900x700")
+            summary_window.grab_set()  # Modal
+            
+            # Center the window
+            summary_window.transient(self.root)
+            x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 450
+            y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 350
+            summary_window.geometry(f"+{x}+{y}")
+            
+            # Create scrollable text area
+            text_frame = ttk.Frame(summary_window)
+            text_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+            
+            text_area = tk.Text(text_frame, wrap=tk.WORD, font=('Consolas', 10), bg='#f8f9fa')
+            scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_area.yview)
+            text_area.configure(yscrollcommand=scrollbar.set)
+            
+            text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            # Generate summary text
+            summary_text = f"""COMPREHENSIVE COMPARISON ANALYSIS - {analysis_type.upper()}
+{'='*70}
+
+ANALYSIS SUMMARY:
+Total Sheets Analyzed: {comparison_results['total_sheets']}
+Analysis Type: {analysis_type}
+
+TOP PERFORMING CONFIGURATIONS:
+"""
+            
+            # Add top 5 rankings
+            for ranking in comparison_results['rankings'][:5]:
+                summary_text += f"""
+Rank {ranking['rank']}: {ranking['sheet_name']}
+   - Composite Score: {ranking['total_score']}
+   - Global Fit: {ranking['global_fit']}%
+   - Cramer's V: {ranking['cramers_v']}
+   - Accuracy: {ranking['accuracy']:.3f}
+   - QC Grade: {ranking['qc_grade']}
+"""
+            
+            if comparison_results['best_configuration']:
+                best = comparison_results['best_configuration']
+                summary_text += f"""
+RECOMMENDED CONFIGURATION:
+   {best['sheet_name']} (Score: {best['total_score']})
+   {best['reason']}
+"""
+            
+            if comparison_results['statistical_summary']:
+                stats = comparison_results['statistical_summary']
+                summary_text += f"""
+STATISTICAL SUMMARY:
+   - Average Performance Score: {stats['average_score']}
+   - Performance Range: {stats['score_range']}
+   - High-Quality Sheets: {stats['high_quality_count']}/{stats['total_analyzed']}
+"""
+            
+            summary_text += f"""
+INTERPRETATION:
+   - Higher composite scores indicate better overall performance
+   - Global Fit shows how well the SOM matches your data
+   - Cramer's V indicates association strength (0-1, higher is better)
+   - QC Grades A-B are recommended for production use
+
+NEXT STEPS:
+   1. Review detailed charts in the analysis window
+   2. Consider the top 2-3 configurations for your specific needs
+   3. Validate results with additional data if available
+"""
+            
+            text_area.insert('1.0', summary_text)
+            text_area.config(state=tk.DISABLED)
+            
+            # Add close button
+            button_frame = ttk.Frame(summary_window)
+            button_frame.pack(pady=10)
+            ttk.Button(button_frame, text="Close", command=summary_window.destroy).pack()
+            
+        except Exception as e:
+            logger.error(f"Failed to show comparison summary popup: {e}")
+
+    def show_comparison_details(self, comparison_results, title):
+        """Show detailed comparison results in a popup window"""
+        try:
+            if not comparison_results:
+                return
+            
+            # Create popup window
+            details_window = tk.Toplevel(self.root)
+            details_window.title(f"Detailed {title}")
+            details_window.geometry("800x600")
+            details_window.grab_set()  # Modal
+            
+            # Center the window
+            details_window.transient(self.root)
+            x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 400
+            y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 300
+            details_window.geometry(f"+{x}+{y}")
+            
+            # Create scrollable text area
+            text_frame = ttk.Frame(details_window)
+            text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            text_area = tk.Text(text_frame, wrap=tk.WORD, font=('Consolas', 10))
+            scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_area.yview)
+            text_area.configure(yscrollcommand=scrollbar.set)
+            
+            text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            # Generate detailed text
+            details_text = f"DETAILED {title.upper()}\n{'='*80}\n\n"
+            
+            details_text += f"ANALYSIS OVERVIEW:\n"
+            details_text += f"Total Sheets: {comparison_results['total_sheets']}\n"
+            details_text += f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            
+            details_text += f"COMPLETE RANKINGS:\n{'-'*50}\n"
+            for ranking in comparison_results['rankings']:
+                details_text += f"""
+Rank {ranking['rank']}: {ranking['sheet_name']}
+   Composite Score: {ranking['total_score']}
+   Global Fit: {ranking['global_fit']}%
+   Cramer's V: {ranking['cramers_v']}
+   Accuracy: {ranking['accuracy']:.3f}
+   QC Grade: {ranking['qc_grade']}
+"""
+            
+            details_text += f"\nSTATISTICAL DETAILS:\n{'-'*50}\n"
+            if comparison_results['statistical_summary']:
+                stats = comparison_results['statistical_summary']
+                details_text += f"Average Score: {stats['average_score']}\n"
+                details_text += f"Score Range: {stats['score_range']}\n"
+                details_text += f"High-Quality Count: {stats['high_quality_count']}\n"
+                details_text += f"Total Analyzed: {stats['total_analyzed']}\n"
+            
+            text_area.insert('1.0', details_text)
+            text_area.config(state=tk.DISABLED)
+            
+            # Add close button
+            button_frame = ttk.Frame(details_window)
+            button_frame.pack(pady=10)
+            ttk.Button(button_frame, text="Close", command=details_window.destroy).pack()
+            
+        except Exception as e:
+            logger.error(f"Failed to show comparison details: {e}")
     
     # =============== END QC PANEL METHODS ===============
 
@@ -8998,6 +9369,14 @@ def setup_application_environment():
 def main():
     """Enhanced main application entry point with comprehensive initialization"""
     try:
+        # Initialize commercial protection
+        if PROTECTION_AVAILABLE:
+            try:
+                protection = initialize_protection()
+                logger.info("Commercial protection initialized")
+            except Exception as e:
+                logger.warning(f"Protection initialization failed: {e}")
+        
         # Run complete initialization
         if not initialize_application():
             logger.critical("Application initialization failed - exiting")
@@ -9037,6 +9416,14 @@ def main():
                     # Cancel any ongoing operations
                     if hasattr(app, 'cancel_event'):
                         app.cancel_event.set()
+                    
+                    # Cleanup commercial protection
+                    if PROTECTION_AVAILABLE:
+                        try:
+                            cleanup_protection()
+                            logger.info("Commercial protection cleaned up")
+                        except Exception as e:
+                            logger.warning(f"Protection cleanup warning: {e}")
                     
                     # Perform comprehensive cleanup
                     app.cleanup()
