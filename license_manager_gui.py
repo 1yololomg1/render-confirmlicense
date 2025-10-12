@@ -28,7 +28,6 @@ class LicenseManagerGUI:
         self.api_base_url = os.getenv('LICENSE_API_URL', 'http://localhost:3000')
         self.admin_key = os.getenv('ADMIN_SECRET_KEY')
         self.licenses_data = []
-        self.local_mode = True  # Enable local testing mode
         
         # Create the interface
         self.create_widgets()

@@ -169,7 +169,6 @@ def load_or_create_config():
             "max_processing_threads": 4,
             "network_timeout": 15,
             "log_level": "INFO",
-            "enable_debug_mode": False,
             "auto_backup": True,
             "theme": "professional"
         },
@@ -1216,7 +1215,7 @@ class VisualizationWindow:
                 self.create_single_sheet_visualizations()
             else:
                 logger.warning("No valid data available for visualization")
-                self.create_placeholder()
+                self.create_no_data_tab()
         except Exception as e:
             logger.warning(f"Failed to load visualizations: {e}")
             self.create_error_tab(str(e))
@@ -3225,8 +3224,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
         scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
     
-    def create_placeholder(self):
-        """Create placeholder when no data is available"""
+    def create_no_data_tab(self):
+        """Create informational tab when no analysis data is available"""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="No Data")
         
@@ -3248,7 +3247,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
             self.analyzer.export_charts()
             messagebox.showinfo("Export Complete", "All charts exported successfully!")
         except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to export charts: {str(e)}")
+            logger.error(f"Chart export failed: {e}")
+            messagebox.showerror("Export Error", 
+                               "Failed to export charts.\n\n"
+                               "Please ensure you have write permissions to the export directory\n"
+                               "and sufficient disk space available.")
     
     def refresh_visualizations(self):
         """Refresh all visualizations"""
@@ -3966,7 +3969,7 @@ class StatisticalAnalyzer:
         except Exception as e:
             logger.warning(f"Failed to auto-resize window: {e}")
     
-    def process_data_placeholder(self):
+    def process_single_sheet_analysis(self):
         """Process single sheet analysis using unified batch architecture"""
         try:
             # Validate inputs
@@ -3996,7 +3999,11 @@ class StatisticalAnalyzer:
                             self.sheet_combo.set(sheet_names[0])
                             self.sheet_var.set(sheet_names[0])
                 except Exception as e:
-                    messagebox.showerror("File Loading Error", f"Failed to load Excel file: {str(e)}")
+                    logger.error(f"Excel file loading failed: {e}")
+                    messagebox.showerror("File Loading Error", 
+                                       "Unable to load the Excel file.\n\n"
+                                       "Please ensure the file is not corrupted and is in a supported format (.xlsx, .xls).\n"
+                                       "Close the file in Excel if it's currently open and try again.")
                     return
             
             # Use the existing batch processing core logic for single sheet
@@ -4004,7 +4011,11 @@ class StatisticalAnalyzer:
             self.batch_process_sheets_directly(selected_sheets)
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to start analysis: {str(e)}")
+            logger.error(f"Analysis startup failed: {e}")
+            messagebox.showerror("Analysis Error", 
+                               "Failed to start statistical analysis.\n\n"
+                               "Please ensure your Excel file is valid and try again.\n"
+                               "If the problem persists, contact support.")
     
     def batch_process_sheets_directly(self, selected_sheets):
         """Process sheets without showing selection dialog"""
@@ -4252,14 +4263,8 @@ class StatisticalAnalyzer:
                 logger.warning(f"Sheet {sheet_name} is empty")
                 return None
             
-            # Perform analysis (this would call your existing analysis methods)
-            # For now, return a placeholder result structure
-            results = {
-                'sheet_name': sheet_name,
-                'data_shape': sheet_data.shape,
-                'confusion_matrix': None,  # Would be populated by actual analysis
-                'timestamp': datetime.now().isoformat()
-            }
+            # Perform comprehensive statistical analysis
+            results = self.process_single_sheet_for_batch(sheet_name, sheet_data)
             
             return results
             
@@ -5135,7 +5140,7 @@ class StatisticalAnalyzer:
         analysis_buttons_row = ttk.Frame(file_frame)
         analysis_buttons_row.pack(fill=tk.X, pady=(10, 0))
         
-        self.analyze_btn = ttk.Button(analysis_buttons_row, text="Single Sheet", command=self.process_data_placeholder, 
+        self.analyze_btn = ttk.Button(analysis_buttons_row, text="Single Sheet", command=self.process_single_sheet_analysis, 
                                      width=15)
         self.analyze_btn.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -6103,10 +6108,37 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                   width=15).pack(side=tk.RIGHT)
     
     def print_terms(self):
-        """Handle printing of terms (placeholder)"""
-        messagebox.showinfo("Print Terms", 
-                           "Terms of Service can be saved or printed using your system's\n"
-                           "standard print functionality from this dialog window.")
+        """Handle printing of terms of service"""
+        try:
+            # Create a temporary file with the terms content
+            terms_content = """CONFIRM Statistical Validation Engine
+Terms of Service and License Agreement
+
+This software contains trade secrets and proprietary information of 
+TraceSeis, Inc. and is protected by copyright and trade secret law.
+
+For full terms of service, please visit: https://deltavsolutions.com/terms
+For support: info@deltavsolutions.com
+
+© TraceSeis, Inc. - deltaV solutions division. All rights reserved."""
+            
+            import tempfile
+            import subprocess
+            import platform
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(terms_content)
+                temp_file = f.name
+            
+            # Open with default text editor for printing
+            if platform.system() == 'Windows':
+                subprocess.run(['notepad', '/p', temp_file], check=False)
+            else:
+                messagebox.showinfo("Print Terms", 
+                                   "Terms of Service content:\n\n" + terms_content[:200] + "...\n\n"
+                                   "Use your system's print functionality to print this dialog.")
+        except Exception as e:
+            messagebox.showerror("Print Error", f"Could not print terms: {str(e)}")
         
     def start_progress_monitor(self):
         """Start the progress monitoring system"""
@@ -8075,7 +8107,7 @@ QUALITY DISTRIBUTION:
                 self.qc_tree.delete(item)
             
             if not hasattr(self, 'batch_results') or not self.batch_results:
-                # Add placeholder row
+                # Add informational row when no data available
                 self.qc_tree.insert('', 'end', values=('No data', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'Run analysis first'))
                 return
             

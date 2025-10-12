@@ -233,7 +233,7 @@ app.post('/webhook', async (req, res) => {
       // Send email automatically (you can manually verify later if needed)
       await sgMail.send({
         to: customerEmail,
-        from: 'noreply@deltavsolutions.com', // CHANGE TO YOUR VERIFIED SENDGRID EMAIL
+        from: 'info@deltavsolutions.com',
         subject: 'Your CONFIRM License Key',
         text: `Thank you for purchasing CONFIRM (${productName})!
 
