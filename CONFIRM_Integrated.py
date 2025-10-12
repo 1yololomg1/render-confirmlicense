@@ -32,7 +32,6 @@ except ImportError:  # pragma: no cover - optional dependency
     _FERNET_AVAILABLE = False
 
 # Configuration and Constants
-FIREBASE_URL = "https://confirm-license-manager-default-rtdb.firebaseio.com"
 # NEW: License server configuration
 LICENSE_SERVER_URL = "https://render-confirmlicense.onrender.com"
 APP_NAME = "CONFIRM Statistical Validation Engine"
@@ -183,8 +182,6 @@ def load_or_create_config():
             "offline_mode_enabled": False
         },
         "security": {
-            "require_auth_token": True,
-            "auth_token": None,
             "allow_legacy_license_requests": False
         }
     }
@@ -345,64 +342,8 @@ def get_detailed_machine_info():
 license_encryption_manager = LicenseEncryptionManager()
 
 
-def get_firebase_auth_token(require: bool = True) -> Optional[str]:
-    """Retrieve the Firebase auth token from environment or configuration."""
-    security_config = app_config.get("security", {}) if isinstance(app_config, dict) else {}
-    token = os.environ.get("CONFIRM_FIREBASE_AUTH_TOKEN") or security_config.get("auth_token")
-
-    if token:
-        return token
-
-    require_token = security_config.get("require_auth_token", True)
-    if require and require_token:
-        raise SecurityError("Firebase authentication token is required but not configured.")
-
-    if require_token:
-        logger.warning("Firebase authentication token missing; requests may be rejected.")
-
-    return None
 
 
-def bind_license_to_computer(license_key, computer_id):
-    """Automatically binds license to computer in Firebase database"""
-    masked_license = mask_license_key(license_key)
-    logger.info(f"Automatically binding license {masked_license} to computer {computer_id}")
-    
-    try:
-        # Update Firebase with computer binding
-        url = f"{FIREBASE_URL}/license/{license_key}.json"
-        auth_token = get_firebase_auth_token()
-        params = {'auth': auth_token} if auth_token else None
-
-        # First get existing license data
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
-        license_data = response.json()
-        if not license_data:
-            logger.error(f"License {masked_license} not found in database")
-            return False
-        
-        # Add computer binding with detailed machine info
-        machine_info = get_detailed_machine_info()
-        license_data['computer_id'] = computer_id
-        license_data['bound_at'] = datetime.now().isoformat()
-        license_data['binding_method'] = 'automatic'
-        license_data['machine_info'] = machine_info
-        
-        # Update the license in Firebase
-        response = requests.patch(url, params=params, json=license_data, timeout=10)
-        response.raise_for_status()
-        
-        logger.info(f"Successfully bound license {masked_license} to computer {computer_id}")
-        return True
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to bind license {masked_license}: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error binding license {masked_license}: {e}")
-        return False
 
 def check_license_with_fingerprint(license_key):
     """Enhanced license validation with comprehensive error handling and logging"""
@@ -628,53 +569,6 @@ def validate_license_activation():
         logger.warning("User cancelled license entry")
         return None
 
-def check_computer_already_licensed(computer_id):
-    """Check if this computer is already bound to any license in Firebase"""
-    try:
-        logger.debug(f"Scanning Firebase for computer {computer_id}...")
-        
-        auth_token = get_firebase_auth_token()
-        params = {
-            'auth': auth_token
-        } if auth_token else {}
-
-        # Query for licenses bound to this computer only
-        params.update({
-            'orderBy': json.dumps('computer_id'),
-            'equalTo': json.dumps(computer_id),
-            'limitToFirst': 1
-        })
-
-        url = f"{FIREBASE_URL}/license.json"
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        
-        all_licenses = response.json()
-        if not all_licenses:
-            logger.debug("No licenses found in database")
-            return None
-        
-        # Check each license for this computer_id
-        for license_key, license_data in all_licenses.items():
-            if isinstance(license_data, dict):
-                stored_computer_id = license_data.get('computer_id')
-                if stored_computer_id == computer_id:
-                    logger.warning(f"Computer {computer_id} already bound to license {mask_license_key(license_key)}")
-                    return license_key
-        
-        logger.debug(f"Computer {computer_id} not found in any existing licenses")
-        return None
-        
-    except SecurityError as sec_err:
-        logger.error(f"Security configuration error during license lookup: {sec_err}")
-        return None
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to check computer licensing: {e}")
-        # In case of network error, allow activation (fail-open for user experience)
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error checking computer licensing: {e}")
-        return None
 
 def show_computer_already_licensed_error(existing_license_key):
     """Show error dialog when computer is already licensed"""
@@ -700,42 +594,6 @@ Contact: info@deltavsolutions.com"""
         
     except Exception as e:
         logger.error(f"Failed to show security error dialog: {e}")
-
-def unbind_computer_from_license(license_key, computer_id):
-    """Unbind computer from a license (admin function)"""
-    try:
-        masked_license = mask_license_key(license_key)
-        logger.info(f"Unbinding computer {computer_id} from license {masked_license}")
-        
-        url = f"{FIREBASE_URL}/license/{license_key}.json"
-        auth_token = get_firebase_auth_token()
-        params = {'auth': auth_token} if auth_token else None
-
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        
-        license_data = response.json()
-        if not license_data:
-            logger.error(f"License {masked_license} not found")
-            return False
-        
-        # Remove computer binding
-        license_data['computer_id'] = None
-        license_data['bound_at'] = None
-        license_data['binding_method'] = None
-        license_data['unbound_at'] = datetime.now().isoformat()
-        license_data['unbound_reason'] = 'administrative_reset'
-        
-        # Update Firebase
-        response = requests.patch(url, params=params, json=license_data, timeout=10)
-        response.raise_for_status()
-        
-        logger.info(f"Successfully unbound computer {computer_id} from license {masked_license}")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Failed to unbind computer from license {masked_license}: {e}")
-        return False
 
 class LicenseDialog:
     def __init__(self):
