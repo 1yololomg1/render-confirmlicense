@@ -527,15 +527,7 @@ def validate_license_activation():
                 except Exception as e:
                     logger.error(f"Failed to remove invalid license file: {e}")
     
-    # SECURITY CHECK: Verify this computer isn't already bound to another license
-    computer_id = get_computer_fingerprint()
-    logger.info(f"Checking if computer {computer_id} is already licensed...")
-    
-    existing_license = check_computer_already_licensed(computer_id)
-    if existing_license:
-        logger.critical(f"SECURITY VIOLATION: Computer already bound to license {mask_license_key(existing_license)}")
-        show_computer_already_licensed_error(existing_license)
-        return None
+    # License validation is now handled by the license server
     
     # Need to get license from user
     logger.info("Requesting license key from user...")
