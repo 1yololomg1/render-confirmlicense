@@ -447,20 +447,24 @@ def check_license_with_fingerprint(license_key):
         return {"valid": False, "reason": str(sec_err)}
 
     except requests.exceptions.Timeout:
-        logger.error("License validation timeout - working in offline mode")
-        return {"valid": True, "tier": "offline", "expires": "unknown", "reason": "Network timeout"}
+        logger.error("License validation timeout - cannot verify license")
+        # SECURITY: For white-label deployment, require online validation
+        return {"valid": False, "reason": "License validation timeout - internet connection required"}
     
     except requests.exceptions.ConnectionError:
-        logger.error("License validation connection failed - working in offline mode")
-        return {"valid": True, "tier": "offline", "expires": "unknown", "reason": "No network connection"}
+        logger.error("License validation connection failed - cannot verify license")
+        # SECURITY: For white-label deployment, require online validation
+        return {"valid": False, "reason": "Network connection required for license validation"}
     
     except requests.exceptions.RequestException as req_error:
         logger.error(f"License validation request failed: {req_error}")
-        return {"valid": True, "tier": "offline", "expires": "unknown", "reason": "Network error"}
+        # SECURITY: For white-label deployment, require online validation
+        return {"valid": False, "reason": "Network error - license validation failed"}
     
     except Exception as e:
         logger.error(f"Unexpected error during license validation for {masked_license}: {e}")
-        return {"valid": True, "tier": "offline", "expires": "unknown", "reason": "Validation error"}
+        # SECURITY: For white-label deployment, fail securely
+        return {"valid": False, "reason": "License validation system error"}
 
 def get_saved_license():
     """Check for saved license with improved error handling and path management"""
@@ -3972,6 +3976,22 @@ class StatisticalAnalyzer:
     def process_single_sheet_analysis(self):
         """Process single sheet analysis using unified batch architecture"""
         try:
+            # SECURITY: Validate license before major operations
+            logger.info("Validating license before analysis...")
+            saved_license = get_saved_license()
+            if not saved_license:
+                messagebox.showerror("License Error", 
+                                   "No valid license found. Please restart the application.")
+                return
+            
+            validation_result = check_license_with_fingerprint(saved_license)
+            if not validation_result.get("valid"):
+                reason = validation_result.get("reason", "Unknown error")
+                messagebox.showerror("License Error", 
+                                   f"License validation failed: {reason}\n\n"
+                                   "Please contact support to renew your license.")
+                return
+            
             # Validate inputs
             if not self.file_path.get():
                 messagebox.showerror("No File Selected", "Please select an Excel file first.")
@@ -7123,6 +7143,22 @@ For support: info@deltavsolutions.com
 
     def batch_analyze_selected_sheets_threaded(self):
         """Process selected sheets with improved UI"""
+        # SECURITY: Validate license before major operations
+        logger.info("Validating license before batch analysis...")
+        saved_license = get_saved_license()
+        if not saved_license:
+            messagebox.showerror("License Error", 
+                               "No valid license found. Please restart the application.")
+            return
+        
+        validation_result = check_license_with_fingerprint(saved_license)
+        if not validation_result.get("valid"):
+            reason = validation_result.get("reason", "Unknown error")
+            messagebox.showerror("License Error", 
+                               f"License validation failed: {reason}\n\n"
+                               "Please contact support to renew your license.")
+            return
+        
         if not self.excel_file:
             messagebox.showerror("Error", "Please load an Excel file first.")
             return
@@ -9358,6 +9394,107 @@ def verify_system_resources():
         logger.warning(f"System resource check failed: {e}")
         return True  # Non-critical, continue anyway
 
+def start_license_monitoring(app):
+    """Start background license monitoring to ensure continued compliance"""
+    import threading
+    import time
+    
+    def license_monitor():
+        """Background thread to monitor license validity"""
+        logger.info("License monitoring started")
+        
+        while True:
+            try:
+                # Check every 30 minutes (1800 seconds)
+                time.sleep(1800)
+                
+                logger.info("Performing periodic license validation...")
+                
+                # Get current saved license
+                saved_license = get_saved_license()
+                if not saved_license:
+                    logger.critical("No license found during periodic check - terminating application")
+                    app.root.after(0, lambda: force_application_exit(app, "License file missing"))
+                    break
+                
+                # Validate license with server
+                validation_result = check_license_with_fingerprint(saved_license)
+                
+                if not validation_result.get("valid"):
+                    reason = validation_result.get("reason", "Unknown error")
+                    logger.critical(f"License validation failed during periodic check: {reason}")
+                    
+                    # Check if it's an expiry issue
+                    if "expired" in reason.lower():
+                        app.root.after(0, lambda: force_application_exit(app, "License has expired"))
+                    else:
+                        app.root.after(0, lambda: force_application_exit(app, f"License invalid: {reason}"))
+                    break
+                
+                logger.info("Periodic license validation successful")
+                
+            except Exception as e:
+                logger.error(f"License monitoring error: {e}")
+                # Continue monitoring even if there's an error, but log it
+                continue
+    
+    # Start monitoring thread as daemon
+    monitor_thread = threading.Thread(target=license_monitor, daemon=True)
+    monitor_thread.start()
+    logger.info("License monitoring thread started")
+
+def force_application_exit(app, reason):
+    """Force application exit due to license violation"""
+    logger.critical(f"Forcing application exit: {reason}")
+    
+    try:
+        # Show user notification
+        messagebox.showerror("License Error", 
+                           f"Application must close: {reason}\n\n"
+                           "Please contact your administrator to renew your license.\n"
+                           "Support: info@deltavsolutions.com")
+        
+        # Stop any ongoing processing
+        if hasattr(app, 'processing_state'):
+            app.processing_state = False
+        if hasattr(app, 'cancel_event'):
+            app.cancel_event.set()
+        
+        # Close application
+        app.root.quit()
+        app.root.destroy()
+        
+    except Exception as e:
+        logger.error(f"Error during forced exit: {e}")
+    
+    # Force system exit
+    sys.exit(1)
+
+def initialize_application_components():
+    """Initialize core application components and verify system requirements"""
+    try:
+        logger.info("Initializing application components...")
+        
+        # Check system requirements
+        if not verify_system_resources():
+            logger.error("System resource check failed")
+            return False
+        
+        # Setup application environment
+        setup_application_environment()
+        
+        # Check and handle terms acceptance
+        if not check_and_handle_terms():
+            logger.error("Terms acceptance failed")
+            return False
+        
+        logger.info("Application components initialized successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Application component initialization failed: {e}")
+        return False
+
 def setup_application_environment():
     """Setup application environment and signal handlers"""
     try:
@@ -9409,8 +9546,28 @@ def main():
             except Exception as e:
                 logger.warning(f"Protection initialization failed: {e}")
         
+        # CRITICAL: Validate license before application starts
+        logger.info("Validating software license...")
+        license_validation = validate_license_activation()
+        
+        if not license_validation or not license_validation.get("valid"):
+            logger.critical("License validation failed - application cannot start")
+            try:
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror("License Required", 
+                                   "This software requires a valid license to operate.\n\n"
+                                   "Please contact your administrator or purchase a license.\n"
+                                   "Support: info@deltavsolutions.com")
+                root.destroy()
+            except:
+                pass
+            sys.exit(1)
+        
+        logger.info("License validation successful - proceeding with application startup")
+        
         # Run complete initialization
-        if not initialize_application():
+        if not initialize_application_components():
             logger.critical("Application initialization failed - exiting")
             sys.exit(1)
         
@@ -9431,6 +9588,9 @@ def main():
         # Create the application instance
         logger.info("Initializing main application components...")
         app = StatisticalAnalyzer(root)
+        
+        # Start license monitoring to ensure continued compliance
+        start_license_monitoring(app)
         
         def on_closing():
             """Enhanced window closing handler with comprehensive cleanup"""
