@@ -1,0 +1,18 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview including the license protection architecture, core components, and their interactions"
+  },
+  {
+    "fileName": "license-protection-algorithms.mdc",
+    "description": "Detailed documentation of the hardware fingerprinting algorithms, anti-debugging measures, and runtime integrity monitoring implementations"
+  },
+  {
+    "fileName": "license-validation-flow.mdc",
+    "description": "Comprehensive documentation of the license validation workflow, including hardware binding, key generation, and validation processes"
+  },
+  {
+    "fileName": "security-mechanisms.mdc",
+    "description": "Detailed documentation of security implementations including anti-tampering measures, environment validation, and protection response mechanisms"
+  }
+]
