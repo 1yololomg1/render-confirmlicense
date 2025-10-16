@@ -4089,6 +4089,9 @@ class StatisticalAnalyzer:
                             sheet_name = selected_sheets[0]
                             if sheet_name in self.batch_results:
                                 self.confusion_matrix = self.batch_results[sheet_name].get('confusion_matrix')
+                                # Populate results dictionary with class metrics for visualization
+                                if 'class_metrics' in self.batch_results[sheet_name]:
+                                    self.results['class_metrics'] = self.batch_results[sheet_name]['class_metrics']
                                 # Display single sheet results
                                 self.update_single_sheet_results_display(sheet_name)
                         else:
@@ -4202,6 +4205,9 @@ class StatisticalAnalyzer:
                             sheet_name = selected_sheets[0]
                             if sheet_name in self.batch_results:
                                 self.confusion_matrix = self.batch_results[sheet_name].get('confusion_matrix')
+                                # Populate results dictionary with class metrics for visualization
+                                if 'class_metrics' in self.batch_results[sheet_name]:
+                                    self.results['class_metrics'] = self.batch_results[sheet_name]['class_metrics']
                         else:
                             # For multiple sheets, show comparison
                             self.update_batch_results_display()
@@ -7198,6 +7204,13 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                         )
                     else:
                         self.safe_update_mode_label("Mode: Single Sheet Analysis", 'blue')
+                        # For single sheet, populate results for visualization
+                        if len(self.batch_results) == 1:
+                            sheet_name = list(self.batch_results.keys())[0]
+                            if 'class_metrics' in self.batch_results[sheet_name]:
+                                self.results['class_metrics'] = self.batch_results[sheet_name]['class_metrics']
+                            if 'confusion_matrix' in self.batch_results[sheet_name]:
+                                self.confusion_matrix = self.batch_results[sheet_name]['confusion_matrix']
 
                     # Update QC Results Panel with new data
                     self.update_qc_results_panel()
@@ -7284,6 +7297,14 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                         100,
                         True,
                     )
+                    
+                    # For single sheet, populate results for visualization
+                    if len(self.batch_results) == 1:
+                        sheet_name = list(self.batch_results.keys())[0]
+                        if 'class_metrics' in self.batch_results[sheet_name]:
+                            self.results['class_metrics'] = self.batch_results[sheet_name]['class_metrics']
+                        if 'confusion_matrix' in self.batch_results[sheet_name]:
+                            self.confusion_matrix = self.batch_results[sheet_name]['confusion_matrix']
                     
                     # Update QC Results Panel with new data
                     self.update_qc_results_panel()
@@ -7412,6 +7433,36 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             inactive_neurons = total_neurons - active_neurons
             percent_undefined = (inactive_neurons / total_neurons) * 100
             
+            # Calculate per-class metrics (precision, recall, f1-score)
+            class_metrics = {}
+            for class_name in confusion_matrix.index:
+                # True Positives: correct predictions for this class
+                tp = confusion_matrix.loc[class_name, class_name]
+                
+                # False Positives: predictions as this class that were wrong
+                fp = confusion_matrix.loc[class_name, :].sum() - tp
+                
+                # False Negatives: actual class items predicted as other classes
+                fn = confusion_matrix.loc[:, class_name].sum() - tp
+                
+                # True Negatives: correct predictions for other classes
+                tn = confusion_matrix.values.sum() - tp - fp - fn
+                
+                # Calculate metrics
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+                f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+                support = confusion_matrix.loc[:, class_name].sum()
+                accuracy = (tp + tn) / confusion_matrix.values.sum() if confusion_matrix.values.sum() > 0 else 0
+                
+                class_metrics[class_name] = {
+                    'precision': precision,
+                    'recall': recall,
+                    'f1_score': f1_score,
+                    'support': support,
+                    'accuracy': accuracy
+                }
+            
             # Return summary results
             return {
                 'sheet_name': sheet_name,
@@ -7425,7 +7476,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 'matrix_shape': confusion_matrix.shape,
                 'confusion_matrix': confusion_matrix,
                 'analysis_matrix': analysis_matrix,
-                'unit_assignments': unit_assignments
+                'unit_assignments': unit_assignments,
+                'class_metrics': class_metrics
             }
             
         except Exception as e:
@@ -9369,13 +9421,16 @@ def setup_application_environment():
 def main():
     """Enhanced main application entry point with comprehensive initialization"""
     try:
-        # Initialize commercial protection
-        if PROTECTION_AVAILABLE:
+        # Initialize commercial protection (only for compiled .exe, not Python scripts)
+        is_compiled = getattr(sys, 'frozen', False)
+        if PROTECTION_AVAILABLE and is_compiled:
             try:
                 protection = initialize_protection()
                 logger.info("Commercial protection initialized")
             except Exception as e:
                 logger.warning(f"Protection initialization failed: {e}")
+        elif PROTECTION_AVAILABLE and not is_compiled:
+            logger.info("Running from Python script - skipping commercial protection (only active in compiled .exe)")
         
         # Run complete initialization
         if not initialize_application():
