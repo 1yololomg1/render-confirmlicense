@@ -6384,7 +6384,8 @@ For support: info@deltavsolutions.com
                         if sheet_names:
                             self.sheet_combo.set(sheet_names[0])
                     
-                    self.update_progress_status(f'Loaded {len(sheet_names)} sheets. Select a sheet to analyze.', 100, True)
+                    # Schedule progress update on main thread
+                    self.root.after(0, lambda: self.update_progress_status(f'Loaded {len(sheet_names)} sheets. Select a sheet to analyze.', 100, True))
                 
                 self.root.after(0, update_ui)
                 
