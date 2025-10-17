@@ -76,7 +76,7 @@ const serviceAccount = {
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
-const appCheck = admin.appCheck();
+
 
 
 const db = admin.firestore();
