@@ -112,8 +112,11 @@ app.post('/validate', async (req, res) => {
     
     const { licenseId, expiry } = verified;
     
+    // Encode license key for Firebase (replace : with -)
+    const encodedKey = license_key.replace(/:/g, '-');
+    
     // Get license from Realtime Database
-    const snapshot = await db.ref(`license/${license_key}`).once('value');
+    const snapshot = await db.ref(`license/${encodedKey}`).once('value');
     const data = snapshot.val();
     
     if (!data) {
@@ -137,7 +140,7 @@ app.post('/validate', async (req, res) => {
     
     // If not yet bound, bind it now
     if (!data.computer_id) {
-      await db.ref(`license/${license_key}`).update({
+      await db.ref(`license/${encodedKey}`).update({
         computer_id: machine_id,
         bound_at: new Date().toISOString(),
         binding_method: 'automatic'
@@ -171,7 +174,10 @@ app.post('/activate', async (req, res) => {
     
     const { licenseId, expiry } = verified;
     
-    const snapshot = await db.ref(`license/${license_key}`).once('value');
+    // Encode license key for Firebase (replace : with -)
+    const encodedKey = license_key.replace(/:/g, '-');
+    
+    const snapshot = await db.ref(`license/${encodedKey}`).once('value');
     const data = snapshot.val();
     
     if (!data) {
@@ -191,7 +197,7 @@ app.post('/activate', async (req, res) => {
     }
     
     // Activate
-    await db.ref(`license/${license_key}`).update({
+    await db.ref(`license/${encodedKey}`).update({
       computer_id: machine_id,
       bound_at: new Date().toISOString(),
       status: 'active'
@@ -220,7 +226,10 @@ app.post('/admin/create-license', async (req, res) => {
   try {
     const { licenseKey, licenseId, expiry } = generateLicense(email, durationDays);
     
-    await db.ref(`license/${licenseKey}`).set({
+    // Encode license key for Firebase (replace : with -)
+    const encodedKey = licenseKey.replace(/:/g, '-');
+    
+    await db.ref(`license/${encodedKey}`).set({
       email,
       tier: productType,
       expires: expiry,
