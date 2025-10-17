@@ -16,6 +16,14 @@ import atexit
 import secrets
 from typing import Optional
 
+# Firebase App Check (optional - only if available)
+try:
+    import firebase_admin
+    from firebase_admin import app_check
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+
 # Import commercial protection module
 try:
     from protection_module import initialize_protection, cleanup_protection
@@ -267,6 +275,25 @@ def save_config(config):
 # Load configuration at startup
 app_config = load_or_create_config()
 
+def get_app_check_token():
+    """Get Firebase App Check token if available"""
+    if not FIREBASE_AVAILABLE:
+        return None
+    
+    try:
+        # Initialize Firebase Admin if not already done
+        if not firebase_admin._apps:
+            # You'll need to add your Firebase config here
+            # For now, return None to skip App Check
+            return None
+        
+        # Get App Check token (this is a simplified version)
+        # In a real implementation, you'd use the Firebase Admin SDK
+        return None
+    except Exception as e:
+        logger.debug(f"App Check token generation failed: {e}")
+        return None
+
 def get_computer_fingerprint():
     """Create unique computer ID for license binding with comprehensive error handling"""
     try:
@@ -360,10 +387,16 @@ def check_license_with_fingerprint(license_key):
         url = f"{LICENSE_SERVER_URL}/validate"
         logger.debug(f"Checking license for key {masked_license}")
         
+        # Prepare headers with App Check token if available
+        headers = {'Content-Type': 'application/json'}
+        app_check_token = get_app_check_token()
+        if app_check_token:
+            headers['X-Firebase-AppCheck'] = app_check_token
+        
         # Make request to Render server
         response = requests.post(url, 
-                               headers={'Content-Type': 'application/json'},
-                               json={'license_key': license_key.strip(), 'machine_id': computer_id},
+                               headers=headers,
+                               json={'licenseKey': license_key.strip(), 'computerId': computer_id},
                                timeout=15)
         response.raise_for_status()  # Raise exception for HTTP errors
         
@@ -5388,7 +5421,10 @@ class StatisticalAnalyzer:
         except AttributeError:
             # Fallback: Just add visual hint for drag and drop
             self.file_entry.insert(0, "Browse or drag Excel file here...")
-            self.file_entry.bind('<Button-1>', lambda e: self.file_entry.delete(0, tk.END) if self.file_entry.get().startswith("Browse") else None)
+            def clear_placeholder(event):
+                if self.file_entry.get().startswith("Browse"):
+                    self.file_entry.delete(0, tk.END)
+            self.file_entry.bind('<Button-1>', clear_placeholder)
     
     def update_activity_indicator(self, message="Working..."):
         """Update the status to show program activity with enhanced visual feedback"""
