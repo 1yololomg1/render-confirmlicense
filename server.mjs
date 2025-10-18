@@ -185,6 +185,15 @@ app.post('/validate', async (req, res) => {
     
     console.log(`Validating license for machine: ${machine_id?.substring(0, 8)}...`);
     
+    // If this is an old-format license, suggest migration
+    if (license_key.includes('-')) {
+      return res.status(400).json({ 
+        error: 'Invalid license key format',
+        message: 'This appears to be an old-format license. Please use the /migrate-license endpoint to migrate this license to the new format.',
+        needs_migration: true
+      });
+    }
+    
     const verified = verifyLicense(license_key);
     if (!verified) {
       return res.status(400).json({ error: 'Invalid license key format' });
@@ -200,6 +209,7 @@ app.post('/validate', async (req, res) => {
       return res.status(404).json({ error: 'License not found' });
     }
     
+    // The rest of your validate endpoint stays the same
     // Check if license is revoked
     if (data.revoked) {
       return res.status(403).json({ error: 'License has been revoked' });
@@ -235,6 +245,37 @@ app.post('/validate', async (req, res) => {
     
   } catch (error) {
     console.error('Validation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Migration endpoint
+app.post('/migrate-license', async (req, res) => {
+  try {
+    const { license_key, machine_id } = req.body;
+    
+    // Only allow migrating old-format licenses
+    if (!license_key.includes('-')) {
+      return res.status(400).json({ 
+        error: 'Not an old-format license',
+        message: 'This license is already in the new format or invalid'
+      });
+    }
+    
+    const result = await migrateOldLicense(license_key, machine_id);
+    
+    if (!result.success) {
+      return res.status(404).json({ error: result.error });
+    }
+    
+    res.json({
+      success: true,
+      message: result.message,
+      new_license_key: result.newLicenseKey
+    });
+    
+  } catch (error) {
+    console.error('Migration error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
