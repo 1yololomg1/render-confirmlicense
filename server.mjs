@@ -98,6 +98,86 @@ function verifyLicense(licenseKey) {
   }
 }
 
+// Helper function to migrate old license formats to new format
+async function migrateOldLicense(oldLicenseKey, machineId) {
+  console.log(`Attempting to migrate license: ${oldLicenseKey}`);
+  
+  // Look up the old license
+  const oldLicenseSnapshot = await db.ref('license').orderByChild('license_key')
+    .equalTo(oldLicenseKey).once('value');
+  
+  if (!oldLicenseSnapshot.exists()) {
+    console.log(`Migration failed: License not found: ${oldLicenseKey}`);
+    return { success: false, error: 'License not found' };
+  }
+  
+  // Get the first matching license
+  const licenseData = oldLicenseSnapshot.val();
+  const oldLicenseId = Object.keys(licenseData)[0];
+  const oldLicense = licenseData[oldLicenseId];
+  
+  // Check if this license was already migrated
+  if (oldLicense.migrated_to) {
+    console.log(`License already migrated: ${oldLicenseKey} → ${oldLicense.migrated_to}`);
+    
+    // Return the new license key that replaced this one
+    const newLicenseSnapshot = await db.ref(`license/${oldLicense.migrated_to}`).once('value');
+    const newLicense = newLicenseSnapshot.val();
+    
+    return {
+      success: true,
+      message: 'License was already migrated',
+      newLicenseKey: newLicense.license_key,
+      licenseData: newLicense
+    };
+  }
+  
+  // Extract expiry year from old license if available, or use default
+  let expiryYear = new Date().getFullYear() + 1; // Default to 1 year from now
+  if (oldLicenseKey.includes('2025')) expiryYear = 2025;
+  else if (oldLicenseKey.includes('2026')) expiryYear = 2026;
+  else if (oldLicenseKey.match(/\d{4}/)) {
+    expiryYear = parseInt(oldLicenseKey.match(/\d{4}/)[0], 10);
+  }
+  
+  // Create a new license with the same permissions but secure format
+  const expiry = new Date(expiryYear, 11, 31).toISOString(); // December 31 of the year
+  const licenseId = crypto.randomBytes(8).toString('hex');
+  const signature = crypto.createHmac('sha256', LICENSE_SECRET)
+    .update(`${licenseId}:${expiry}`)
+    .digest('hex')
+    .substring(0, 16);
+  
+  const newLicenseKey = `${licenseId}:${expiry}:${signature}`;
+  
+  // Create the new license
+  await db.ref(`license/${licenseId}`).set({
+    ...oldLicense,
+    license_key: newLicenseKey,
+    old_license_key: oldLicense.license_key,
+    expires: expiry,
+    migrated_at: new Date().toISOString(),
+    migrated_from: oldLicenseId,
+    computer_id: machineId || oldLicense.computer_id
+  });
+  
+  // Update the old license to reference the new one
+  await db.ref(`license/${oldLicenseId}`).update({
+    migrated_to: licenseId,
+    migrated_at: new Date().toISOString(),
+    status: 'migrated'
+  });
+  
+  console.log(`License migrated successfully: ${oldLicenseKey} → ${newLicenseKey}`);
+  
+  return {
+    success: true,
+    message: 'License migrated successfully',
+    newLicenseKey,
+    licenseId
+  };
+}
+
 // VALIDATE LICENSE - Main endpoint for Python client
 app.post('/validate', async (req, res) => {
   try {
