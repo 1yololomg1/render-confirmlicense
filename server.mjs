@@ -1096,6 +1096,265 @@ app.post('/admin/create-license', async (req, res) => {
   }
 });
 
+// Admin API endpoints for the admin interface
+app.post('/admin/search-licenses', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const { field, value } = req.body;
+    
+    if (!field || !value) {
+      return res.status(400).json({ error: 'Field and value are required' });
+    }
+    
+    // Determine how to query based on the field
+    let snapshot;
+    
+    // Different query strategy based on field
+    if (field === 'email') {
+      snapshot = await db.ref('license').orderByChild('email').equalTo(value).once('value');
+    } else if (field === 'license_key') {
+      snapshot = await db.ref('license').orderByChild('license_key').startAt(value).endAt(value + '\uf8ff').once('value');
+    } else if (field === 'computer_id') {
+      snapshot = await db.ref('license').orderByChild('computer_id').equalTo(value).once('value');
+    } else if (field === 'status') {
+      snapshot = await db.ref('license').orderByChild('status').equalTo(value).once('value');
+    } else {
+      return res.status(400).json({ error: 'Invalid search field' });
+    }
+    
+    const licenses = [];
+    snapshot.forEach(child => {
+      licenses.push({
+        id: child.key,
+        ...child.val()
+      });
+    });
+    
+    res.json({ licenses });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/admin/update-license', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const { licenseId, status, extendDays, notes, unbindMachine } = req.body;
+    
+    if (!licenseId) {
+      return res.status(400).json({ error: 'License ID is required' });
+    }
+    
+    // Get the current license data
+    const snapshot = await db.ref(`license/${licenseId}`).once('value');
+    const license = snapshot.val();
+    
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+    
+    // Prepare updates
+    const updates = {};
+    
+    // Update status if provided
+    if (status) {
+      updates.status = status;
+    }
+    
+    // Extend expiry if days provided
+    if (extendDays && extendDays > 0) {
+      const currentExpiry = new Date(license.expires);
+      const newExpiry = new Date(currentExpiry.getTime() + (extendDays * 24 * 60 * 60 * 1000));
+      updates.expires = newExpiry.toISOString();
+    }
+    
+    // Add notes if provided
+    if (notes) {
+      updates.admin_notes = license.admin_notes 
+        ? `${license.admin_notes}\\n${new Date().toISOString()}: ${notes}` 
+        : `${new Date().toISOString()}: ${notes}`;
+    }
+    
+    // Unbind machine if requested
+    if (unbindMachine) {
+      updates.computer_id = null;
+      updates.bound_at = null;
+      updates.binding_method = null;
+    }
+    
+    // Add last updated timestamp
+    updates.last_updated = new Date().toISOString();
+    updates.updated_by = 'admin';
+    
+    // Apply updates
+    await db.ref(`license/${licenseId}`).update(updates);
+    
+    res.json({ 
+      success: true, 
+      message: 'License updated successfully',
+      updates
+    });
+    
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Admin endpoint to migrate all old licenses
+app.post('/admin/migrate-all-licenses', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    // Fetch all licenses
+    const snapshot = await db.ref('license').once('value');
+    const allLicenses = snapshot.val() || {};
+    
+    const oldFormatLicenses = [];
+    
+    // Find all licenses with old format keys
+    for (const [key, license] of Object.entries(allLicenses)) {
+      if (license.license_key && license.license_key.includes('-') && !license.migrated_to) {
+        oldFormatLicenses.push({ key, license });
+      }
+    }
+    
+    console.log(`Found ${oldFormatLicenses.length} old-format licenses to migrate`);
+    
+    // Migrate each old license
+    const results = [];
+    for (const { key, license } of oldFormatLicenses) {
+      try {
+        const result = await migrateOldLicense(license.license_key, license.computer_id);
+        results.push({
+          oldKey: license.license_key,
+          newKey: result.newLicenseKey,
+          success: result.success
+        });
+      } catch (error) {
+        console.error(`Failed to migrate license ${license.license_key}:`, error);
+        results.push({
+          oldKey: license.license_key,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    res.json({
+      totalLicenses: oldFormatLicenses.length,
+      results
+    });
+    
+  } catch (error) {
+    console.error('Mass migration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/admin/license-stats', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    // Fetch all licenses
+    const snapshot = await db.ref('license').once('value');
+    const allLicenses = snapshot.val() || {};
+    
+    // Count metrics
+    let activeLicenses = 0;
+    let inactiveLicenses = 0;
+    let revokedLicenses = 0;
+    let expiredLicenses = 0;
+    let migratedLicenses = 0;
+    
+    const licenseTypes = {};
+    const recentActivity = [];
+    
+    const now = new Date();
+    
+    // Process each license
+    Object.entries(allLicenses).forEach(([id, license]) => {
+      // Count by status
+      if (license.status === 'active') {
+        activeLicenses++;
+      } else if (license.status === 'inactive') {
+        inactiveLicenses++;
+      } else if (license.status === 'revoked') {
+        revokedLicenses++;
+        inactiveLicenses++; // Count revoked as inactive
+      } else if (license.status === 'migrated') {
+        migratedLicenses++;
+      }
+      
+      // Check if expired
+      if (license.expires && new Date(license.expires) < now) {
+        expiredLicenses++;
+      }
+      
+      // Count by type
+      const type = license.tier || 'unknown';
+      licenseTypes[type] = (licenseTypes[type] || 0) + 1;
+      
+      // Recent activity
+      if (license.last_updated && new Date(license.last_updated) > new Date(now - 7 * 24 * 60 * 60 * 1000)) {
+        recentActivity.push({
+          licenseId: id,
+          timestamp: license.last_updated,
+          action: 'Updated',
+          details: \`Status: \${license.status}, Updated by: \${license.updated_by || 'system'}\`
+        });
+      }
+      
+      if (license.created_at && new Date(license.created_at) > new Date(now - 7 * 24 * 60 * 60 * 1000)) {
+        recentActivity.push({
+          licenseId: id,
+          timestamp: license.created_at,
+          action: 'Created',
+          details: license.admin_created ? 'Created by admin' : 'Created by system'
+        });
+      }
+      
+      if (license.migrated_at && new Date(license.migrated_at) > new Date(now - 7 * 24 * 60 * 60 * 1000)) {
+        recentActivity.push({
+          licenseId: id,
+          timestamp: license.migrated_at,
+          action: 'Migrated',
+          details: \`From: \${license.old_license_key || 'unknown'}\`
+        });
+      }
+    });
+    
+    // Sort recent activity by timestamp (newest first)
+    recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    res.json({
+      totalLicenses: Object.keys(allLicenses).length,
+      activeLicenses,
+      inactiveLicenses,
+      revokedLicenses,
+      expiredLicenses,
+      migratedLicenses,
+      licenseTypes,
+      recentActivity: recentActivity.slice(0, 10) // Just return the 10 most recent activities
+    });
+    
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/', (req, res) => res.send('CONFIRM License Server Running'));
 
