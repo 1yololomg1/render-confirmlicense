@@ -7,6 +7,27 @@ import sgMail from "@sendgrid/mail";
 const app = express();
 app.use(express.json());
 
+// Helper functions for Firebase key sanitization
+function sanitizeLicenseKey(licenseKey) {
+  return licenseKey
+    .replace(/\./g, '_DOT_')
+    .replace(/\$/g, '_DOLLAR_')
+    .replace(/#/g, '_HASH_')
+    .replace(/\[/g, '_LBRACKET_')
+    .replace(/\]/g, '_RBRACKET_')
+    .replace(/\//g, '_SLASH_');
+}
+
+function unsanitizeLicenseKey(sanitizedKey) {
+  return sanitizedKey
+    .replace(/_DOT_/g, '.')
+    .replace(/_DOLLAR_/g, '$')
+    .replace(/_HASH_/g, '#')
+    .replace(/_LBRACKET_/g, '[')
+    .replace(/_RBRACKET_/g, ']')
+    .replace(/_SLASH_/g, '/');
+}
+
 // Security Headers Middleware
 app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -824,6 +845,27 @@ function verifyLicense(licenseKey) {
   }
 }
 
+// Helper functions for Firebase key sanitization (if needed)
+function sanitizeLicenseKey(licenseKey) {
+  return licenseKey
+    .replace(/\./g, '_DOT_')
+    .replace(/\$/g, '_DOLLAR_')
+    .replace(/#/g, '_HASH_')
+    .replace(/\[/g, '_LBRACKET_')
+    .replace(/\]/g, '_RBRACKET_')
+    .replace(/\//g, '_SLASH_');
+}
+
+function unsanitizeLicenseKey(sanitizedKey) {
+  return sanitizedKey
+    .replace(/_DOT_/g, '.')
+    .replace(/_DOLLAR_/g, '$')
+    .replace(/_HASH_/g, '#')
+    .replace(/_LBRACKET_/g, '[')
+    .replace(/_RBRACKET_/g, ']')
+    .replace(/_SLASH_/g, '/');
+}
+
 // Helper function to migrate old license formats to new format
 async function migrateOldLicense(oldLicenseKey, machineId) {
   console.log(`Attempting to migrate license: ${oldLicenseKey}`);
@@ -1159,6 +1201,51 @@ app.post('/admin/update-license', async (req, res) => {
     if (!license) {
       return res.status(404).json({ error: 'License not found' });
     }
+
+    // Migration script to fix Firebase key incompatible characters
+app.post('/admin/migrate-licenses', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const snapshot = await db.ref('license').once('value');
+    const licenses = snapshot.val() || {};
+    
+    const migrated = [];
+    const errors = [];
+    
+    for (const [originalKey, licenseData] of Object.entries(licenses)) {
+      const sanitizedKey = sanitizeLicenseKey(originalKey);
+      
+      if (sanitizedKey !== originalKey) {
+        try {
+          // Copy to new sanitized path
+          await db.ref(`license/${sanitizedKey}`).set(licenseData);
+          
+          // Remove old path
+          await db.ref(`license/${originalKey}`).remove();
+          
+          migrated.push({ original: originalKey, sanitized: sanitizedKey });
+          console.log(`Migrated: ${originalKey} -> ${sanitizedKey}`);
+        } catch (error) {
+          errors.push({ key: originalKey, error: error.message });
+        }
+      }
+    }
+
+    res.json({ 
+      message: `Migration completed`,
+      migrated: migrated.length,
+      errors: errors.length,
+      details: { migrated, errors }
+    });
+
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: 'Migration failed: ' + error.message });
+  }
+});
     
     // Prepare updates
     const updates = {};
@@ -1312,7 +1399,7 @@ app.get('/admin/license-stats', async (req, res) => {
           licenseId: id,
           timestamp: license.last_updated,
           action: 'Updated',
-          details: \`Status: \${license.status}, Updated by: \${license.updated_by || 'system'}\`
+          details: `Status: \${license.status}, Updated by: \${license.updated_by || 'system'}`
         });
       }
       
@@ -1330,10 +1417,11 @@ app.get('/admin/license-stats', async (req, res) => {
           licenseId: id,
           timestamp: license.migrated_at,
           action: 'Migrated',
-          details: \`From: \${license.old_license_key || 'unknown'}\`
+          details: `From: ${license.old_license_key || 'unknown'}`
         });
       }
     });
+    
     
     // Sort recent activity by timestamp (newest first)
     recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
