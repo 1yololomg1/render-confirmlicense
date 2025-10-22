@@ -3,6 +3,7 @@ services:
     name: confirm-license-server
     env: node
     plan: free
+    rootDir: ./02_SERVER
     buildCommand: npm install
     startCommand: npm start
     envVars:
