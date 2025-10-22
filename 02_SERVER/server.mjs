@@ -463,6 +463,8 @@ app.get('/admin', (req, res) => {
         .flex-row { display: flex; gap: 10px; }
         .flex-row > * { flex-grow: 1; }
         .json-viewer { max-height: 400px; overflow-y: auto; }
+        .license-row:hover { background-color: #f8f9fa; }
+        .license-row:active { background-color: #e9ecef; }
       </style>
     </head>
     <body>
@@ -813,7 +815,7 @@ app.get('/admin', (req, res) => {
               const isExpired = expiryDate < new Date();
               
               html += \`
-                <tr data-id="\${license.id}">
+                <tr class="license-row" data-id="\${license.id}" style="cursor: pointer; transition: background-color 0.2s;">
                   <td>\${license.id.substring(0, 8)}...</td>
                   <td>\${license.email || 'N/A'}</td>
                   <td>\${license.tier || 'standard'}</td>
@@ -833,9 +835,19 @@ app.get('/admin', (req, res) => {
             
             document.getElementById('searchResults').innerHTML = html;
             
-            // Add event listeners to view buttons
+            // Add event listeners to view buttons and entire rows
             document.querySelectorAll('.view-license').forEach(button => {
-              button.addEventListener('click', function() {
+              button.addEventListener('click', function(e) {
+                e.stopPropagation(); // Prevent row click when button is clicked
+                const licenseId = this.dataset.id;
+                const license = data.licenses.find(l => l.id === licenseId);
+                showLicenseDetails(license);
+              });
+            });
+            
+            // Add event listeners to entire rows for clicking
+            document.querySelectorAll('.license-row').forEach(row => {
+              row.addEventListener('click', function() {
                 const licenseId = this.dataset.id;
                 const license = data.licenses.find(l => l.id === licenseId);
                 showLicenseDetails(license);

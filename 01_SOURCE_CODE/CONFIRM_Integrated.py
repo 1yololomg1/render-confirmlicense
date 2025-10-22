@@ -3058,6 +3058,16 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
             # Create figure with subplots for different pie analyses
             fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
             
+            # Define industry standard colors for consistent category mapping
+            industry_colors = {
+                'WetCalcite': '#1f77b4',      # Blue
+                'Porous Calcite': '#ff7f0e',   # Orange  
+                'DolmiticCalcite': '#2ca02c',  # Green
+                'Tight Clean Calcite': '#d62728', # Red
+                'Tight Clean Calc': '#d62728',    # Red (variant)
+                'Others': '#9467bd'            # Purple
+            }
+            
             if hasattr(self.analyzer, 'confusion_matrix') and self.analyzer.confusion_matrix is not None:
                 # Class distribution pie chart
                 ax1 = fig.add_subplot(2, 2, 1)
@@ -3074,7 +3084,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                     pie_data = list(top_classes.values)
                     pie_labels = list(top_classes.index)
                 
-                colors = plt.cm.tab10(np.linspace(0, 1, len(pie_data)))
+                # Map colors to labels, using industry standards
+                colors = [industry_colors.get(label, '#17becf') for label in pie_labels]
                 wedges, texts, autotexts = ax1.pie(pie_data, labels=pie_labels, autopct='%1.1f%%', 
                                                    colors=colors, startangle=90)
                 
@@ -3100,7 +3111,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                     pie_data_pred = list(top_predicted.values)
                     pie_labels_pred = list(top_predicted.index)
                 
-                colors_pred = plt.cm.tab20(np.linspace(0, 1, len(pie_data_pred)))
+                # Use same industry standard colors for predicted classes
+                colors_pred = [industry_colors.get(label, '#17becf') for label in pie_labels_pred]
                 wedges, texts, autotexts = ax2.pie(pie_data_pred, labels=pie_labels_pred, autopct='%1.1f%%', 
                                                    colors=colors_pred, startangle=90)
                 
