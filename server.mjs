@@ -7,25 +7,19 @@ import sgMail from "@sendgrid/mail";
 const app = express();
 app.use(express.json());
 
-// Helper functions for Firebase key sanitization
-function sanitizeLicenseKey(licenseKey) {
-  return licenseKey
-    .replace(/\./g, '_DOT_')
-    .replace(/\$/g, '_DOLLAR_')
-    .replace(/#/g, '_HASH_')
-    .replace(/\[/g, '_LBRACKET_')
-    .replace(/\]/g, '_RBRACKET_')
-    .replace(/\//g, '_SLASH_');
-}
+// Environment variable validation
+const requiredEnvVars = [
+  'type', 'project_id', 'private_key_id', 'private_key', 'client_email',
+  'client_id', 'auth_uri', 'token_uri', 'auth_provider_x509_cert_url',
+  'client_x509_cert_url', 'universe_domain', 'SHARED_SECRET', 'LICENSE_SECRET'
+];
 
-function unsanitizeLicenseKey(sanitizedKey) {
-  return sanitizedKey
-    .replace(/_DOT_/g, '.')
-    .replace(/_DOLLAR_/g, '$')
-    .replace(/_HASH_/g, '#')
-    .replace(/_LBRACKET_/g, '[')
-    .replace(/_RBRACKET_/g, ']')
-    .replace(/_SLASH_/g, '/');
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error('Missing required environment variables:', missingVars);
+  console.error('Please set all Firebase service account environment variables');
+  process.exit(1);
 }
 
 // Security Headers Middleware
@@ -780,37 +774,57 @@ app.get('/admin', (req, res) => {
   `);
 });
 
-// Initialize Firebase with Realtime Database
-const serviceAccount = {
-  type: process.env.type,
-  project_id: process.env.project_id,
-  private_key_id: process.env.private_key_id,
-  private_key: process.env.private_key?.replace(/\\n/g, '\n'),
-  client_email: process.env.client_email,
-  client_id: process.env.client_id,
-  auth_uri: process.env.auth_uri,
-  token_uri: process.env.token_uri,
-  auth_provider_x509_cert_url: process.env.auth_provider_x509_cert_url,
-  client_x509_cert_url: process.env.client_x509_cert_url,
-  universe_domain: process.env.universe_domain
-};
+// Initialize Firebase with error handling
+let db;
+try {
+  const serviceAccount = {
+    type: process.env.type,
+    project_id: process.env.project_id,
+    private_key_id: process.env.private_key_id,
+    private_key: process.env.private_key?.replace(/\\n/g, '\n'),
+    client_email: process.env.client_email,
+    client_id: process.env.client_id,
+    auth_uri: process.env.auth_uri,
+    token_uri: process.env.token_uri,
+    auth_provider_x509_cert_url: process.env.auth_provider_x509_cert_url,
+    client_x509_cert_url: process.env.client_x509_cert_url,
+    universe_domain: process.env.universe_domain
+  };
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://confirm-license-manager-default-rtdb.firebaseio.com"
-});
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://confirm-license-manager-default-rtdb.firebaseio.com"
+  });
 
-// Use Realtime Database instead of Firestore
-const db = admin.database();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  db = admin.database();
+  console.log('Firebase Realtime Database initialized successfully');
+} catch (error) {
+  console.error('Failed to initialize Firebase:', error);
+  process.exit(1);
+}
+
+// Initialize other services with error handling
+let stripe, sgMailInstance;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    console.log('Stripe initialized successfully');
+  }
+  
+  if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    sgMailInstance = sgMail;
+    console.log('SendGrid initialized successfully');
+  }
+} catch (error) {
+  console.warn('Optional services failed to initialize:', error.message);
+}
 
 const sharedSecret = process.env.SHARED_SECRET;
 const LICENSE_SECRET = process.env.LICENSE_SECRET;
 
 console.log(`Using admin secret: ${sharedSecret?.substring(0, 8)}...`);
 console.log(`Using license secret: ${LICENSE_SECRET?.substring(0, 8)}...`);
-console.log('Firebase Realtime Database initialized: true');
 
 // License generation helper
 function generateLicense(email, durationDays) {
@@ -1443,8 +1457,41 @@ app.get('/admin/license-stats', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    services: {
+      firebase: 'connected',
+      stripe: stripe ? 'connected' : 'not configured',
+      sendgrid: sgMailInstance ? 'connected' : 'not configured'
+    }
+  });
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/', (req, res) => res.send('CONFIRM License Server Running'));
 
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  process.exit(0);
+});
+
 const port = process.env.PORT || 10000;
-app.listen(port, () => console.log(`License server on ${port}`));
+app.listen(port, () => {
+  console.log(`License server running on port ${port}`);
+  console.log(`Health check: http://localhost:${port}/health`);
+});
