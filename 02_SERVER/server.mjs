@@ -113,13 +113,16 @@ function generateLicense(email, durationDays) {
   return { licenseKey, licenseId, expiry };
 }
 
-// License verification helper
 function verifyLicense(licenseKey) {
   try {
     const parts = licenseKey.split(':');
-    if (parts.length !== 3) return null;
+    if (parts.length < 3) return null;
     
-    const [licenseId, expiry, signature] = parts;
+    // Handle colons in ISO timestamp: first part is licenseId, last is signature, middle is expiry
+    const licenseId = parts[0];
+    const signature = parts[parts.length - 1];
+    const expiry = parts.slice(1, -1).join(':');
+    
     const expectedSignature = crypto.createHmac('sha256', LICENSE_SECRET)
       .update(`${licenseId}:${expiry}`)
       .digest('hex')
@@ -132,7 +135,6 @@ function verifyLicense(licenseKey) {
     return null;
   }
 }
-
 // Helper function to migrate old license formats to new format
 async function migrateOldLicense(oldLicenseKey, machineId) {
   console.log(`Attempting to migrate license: ${oldLicenseKey}`);
@@ -232,8 +234,11 @@ app.post('/validate', async (req, res) => {
   // ADD DEBUG LOGGING:
     const parts = license_key.split(':');
     console.log('License parts:', parts);
-    if (parts.length === 3) {
-      const [licenseId, expiry, signature] = parts;
+    if (parts.length >= 3) {
+      const licenseId = parts[0];
+      const signature = parts[parts.length - 1];
+      const expiry = parts.slice(1, -1).join(':');
+      
       const expectedSignature = crypto.createHmac('sha256', LICENSE_SECRET)
         .update(`${licenseId}:${expiry}`)
         .digest('hex')
