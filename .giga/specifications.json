@@ -1,0 +1,22 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview documenting the license management architecture, protection mechanisms, and key components interaction"
+  },
+  {
+    "fileName": "protection-algorithms.mdc",
+    "description": "Detailed documentation of the hardware fingerprinting algorithms, anti-debugging systems, and runtime integrity verification mechanisms"
+  },
+  {
+    "fileName": "license-models.mdc",
+    "description": "Documentation of license data models, types (student/startup/professional/enterprise), and their relationships with hardware bindings"
+  },
+  {
+    "fileName": "license-workflow.mdc",
+    "description": "Complete documentation of license lifecycle including creation, validation, revocation, and migration processes with state transitions"
+  },
+  {
+    "fileName": "security-implementation.mdc",
+    "description": "Technical details of the multi-layer security implementation including tampering detection, VM detection, and cryptographic validation"
+  }
+]

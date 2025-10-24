@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "license": {
+      ".indexOn": ["status", "email", "computer_id", "license_key", "tier"]
+    }
+  }
+}
