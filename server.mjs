@@ -414,3 +414,104 @@ app.post('/api/revoke-license', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`License server on ${PORT}`);
 });
+
+
+// ORGANIC ENHANCEMENT - Session Token Caching
+const sessionTokens = new Map(); // In-memory session cache
+
+// New endpoint for cached validation
+app.post('/validate-cached', async (req, res) => {
+  try {
+    const { licenseKey, machineId, sessionToken } = req.body;
+
+    // Check if we have a valid cached session
+    if (sessionToken && sessionTokens.has(sessionToken)) {
+      const session = sessionTokens.get(sessionToken);
+      
+      // Check if session is still valid (7 days)
+      if (new Date() < new Date(session.expiresAt) && session.licenseKey === licenseKey) {
+        console.log(`Using cached session for ${session.licenseId}`);
+        return res.json({
+          valid: true,
+          licenseId: session.licenseId,
+          expiresAt: session.licenseExpiresAt,
+          sessionToken: sessionToken,
+          sessionExpiresAt: session.expiresAt,
+          source: 'cache'
+        });
+      } else {
+        // Remove expired session
+        sessionTokens.delete(sessionToken);
+      }
+    }
+
+    // No valid session - do full validation (same as existing logic)
+    const parts = licenseKey.split(':');
+    if (parts.length !== 3) {
+      return res.status(400).json({ valid: false, error: 'Invalid license key format' });
+    }
+
+    const [licenseId, expiresAt, hash] = parts;
+
+    // Use existing validation logic
+    const licenseRef = db.ref(`licenses/${licenseId}`);
+    const snapshot = await licenseRef.once('value');
+
+    if (!snapshot.exists()) {
+      return res.json({ valid: false, error: 'License not found' });
+    }
+
+    if (new Date() > new Date(expiresAt)) {
+      return res.json({ valid: false, error: 'License expired' });
+    }
+
+    // Verify hash (same as existing)
+    const expectedHash = crypto
+      .createHash('md5')
+      .update(licenseId + expiresAt + process.env.LICENSE_SECRET)
+      .digest('hex')
+      .substring(0, 16);
+
+    if (hash !== expectedHash) {
+      return res.json({ valid: false, error: 'Invalid license signature' });
+    }
+
+    // Create new 7-day session token
+    const newSessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    sessionTokens.set(newSessionToken, {
+      licenseKey,
+      licenseId,
+      licenseExpiresAt: expiresAt,
+      expiresAt: sessionExpiresAt,
+      machineId,
+      createdAt: new Date().toISOString()
+    });
+
+    console.log(`Created 7-day session for license ${licenseId}`);
+
+    res.json({
+      valid: true,
+      licenseId,
+      expiresAt,
+      sessionToken: newSessionToken,
+      sessionExpiresAt,
+      source: 'validated'
+    });
+
+  } catch (error) {
+    console.error('Cached validation error:', error);
+    res.status(500).json({ valid: false, error: 'Validation failed' });
+  }
+});
+
+// Cleanup expired sessions every hour
+setInterval(() => {
+  const now = new Date();
+  for (const [token, session] of sessionTokens.entries()) {
+    if (now > new Date(session.expiresAt)) {
+      sessionTokens.delete(token);
+    }
+  }
+}, 60 * 60 * 1000);
