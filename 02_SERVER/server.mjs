@@ -229,14 +229,6 @@ app.post('/validate', async (req, res) => {
     
     console.log(`Validating license for machine: ${machine_id?.substring(0, 8)}...`);
     
-    // If this is an old-format license, suggest migration
-    if (license_key.includes('-')) {
-      return res.status(400).json({ 
-        error: 'Invalid license key format',
-        message: 'This appears to be an old-format license. Please use the /migrate-license endpoint to migrate this license to the new format.',
-        needs_migration: true
-      });
-    }
     
     const verified = verifyLicense(license_key);
     if (!verified) {
