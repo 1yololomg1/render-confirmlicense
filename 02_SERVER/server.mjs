@@ -296,21 +296,6 @@ app.post('/validate', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-// Rest of your endpoints remain the same...
-    // ADD DEBUG LOGGING:
-    const parts = license_key.split(':');
-    console.log('License parts:', parts);
-    if (parts.length === 3) {
-      const [licenseId, expiry, signature] = parts;
-      const expectedSignature = crypto.createHmac('sha256', LICENSE_SECRET)
-        .update(`${licenseId}:${expiry}`)
-        .digest('hex')
-        .substring(0, 16);
-      console.log('Expected signature:', expectedSignature);
-      console.log('Actual signature:', signature);
-      console.log('Signatures match:', signature === expectedSignature);
-    }
     
     const verified = verifyLicense(license_key);
     if (!verified) {
