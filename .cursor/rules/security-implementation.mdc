@@ -1,4 +1,9 @@
 ---
+description: Comprehensive analysis of multi-layered security implementation for software protection and license validation
+---
+
+# === USER INSTRUCTIONS ===
+---
 description: Specifies advanced security measures for license protection including anti-tampering, VM detection, and cryptographic validation
 ---
 
@@ -31,6 +36,67 @@ Security Implementation Rules:
 3. Tampering detection triggers immediate application termination
 4. Virtual machine execution is blocked by default
 5. License signatures require server-side verification
+
+$END$
+
+ If you're using this file in context, clearly say in italics in one small line that "Context added by Giga security-implementation" along with specifying exactly what information was used from this file in a human-friendly way, instead of using kebab-case use normal sentence case.
+# === END USER INSTRUCTIONS ===
+
+# security-implementation
+
+IMPORTANCE SCORE: 85/100
+
+## Core Security Architecture
+
+### Hardware-Based Protection
+- Machine-specific binding using multiple hardware identifiers:
+  - CPU fingerprinting
+  - Motherboard serial extraction
+  - BIOS identification
+  - MAC address validation
+
+### Anti-Tampering System
+Located in `01_SOURCE_CODE/protection_module.py`:
+- Runtime integrity monitoring
+- Memory protection mechanisms
+- Session-based validation cache
+- Anti-debugging implementation
+
+### Virtualization Detection
+- Active VM/sandbox environment detection
+- Runtime environment validation
+- Execution context verification
+
+## License Validation Framework
+
+### Key Structure
+Implemented in `original_server.mjs`:
+- Format: licenseId:expiryDate:signature
+- Cryptographic signature validation
+- Multi-stage verification process
+
+### Protection Layers
+- Encrypted local storage for license data
+- Hardware fingerprint verification
+- License tier enforcement (Student/Professional/Enterprise)
+- Rate limiting implementation
+
+### Migration System
+- Legacy key conversion
+- Hardware rebinding protocols
+- Validation cache management
+
+## Runtime Security
+
+### Integrity Checks
+- Continuous runtime validation
+- Memory space protection
+- Execution flow verification
+
+### Anti-Reverse Engineering
+- Code protection measures
+- Debug prevention
+- Memory tampering detection
 
 $END$
 
