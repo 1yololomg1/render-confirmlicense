@@ -229,13 +229,18 @@ app.post('/validate', async (req, res) => {
     
     console.log(`Validating license for machine: ${machine_id?.substring(0, 8)}...`);
     
-    // If this is an old-format license, suggest migration
-    if (license_key.includes('-')) {
-      return res.status(400).json({ 
-        error: 'Invalid license key format',
-        message: 'This appears to be an old-format license. Please use the /migrate-license endpoint to migrate this license to the new format.',
-        needs_migration: true
-      });
+  // ADD DEBUG LOGGING:
+    const parts = license_key.split(':');
+    console.log('License parts:', parts);
+    if (parts.length === 3) {
+      const [licenseId, expiry, signature] = parts;
+      const expectedSignature = crypto.createHmac('sha256', LICENSE_SECRET)
+        .update(`${licenseId}:${expiry}`)
+        .digest('hex')
+        .substring(0, 16);
+      console.log('Expected signature:', expectedSignature);
+      console.log('Actual signature:', signature);
+      console.log('Signatures match:', signature === expectedSignature);
     }
     
     const verified = verifyLicense(license_key);
