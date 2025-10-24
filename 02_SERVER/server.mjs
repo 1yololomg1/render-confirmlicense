@@ -228,7 +228,31 @@ app.post('/validate', async (req, res) => {
     }
     
     console.log(`Validating license for machine: ${machine_id?.substring(0, 8)}...`);
+
+    // VALIDATE LICENSE - Main endpoint for Python client
+app.post('/validate', async (req, res) => {
+  try {
+    const { license_key, machine_id } = req.body;
     
+    if (!license_key || !machine_id) {
+      return res.status(400).json({ error: 'License key and machine ID are required' });
+    }
+    
+    console.log(`Validating license for machine: ${machine_id?.substring(0, 8)}...`);
+    
+    // ADD DEBUG LOGGING:
+    const parts = license_key.split(':');
+    console.log('License parts:', parts);
+    if (parts.length === 3) {
+      const [licenseId, expiry, signature] = parts;
+      const expectedSignature = crypto.createHmac('sha256', LICENSE_SECRET)
+        .update(`${licenseId}:${expiry}`)
+        .digest('hex')
+        .substring(0, 16);
+      console.log('Expected signature:', expectedSignature);
+      console.log('Actual signature:', signature);
+      console.log('Signatures match:', signature === expectedSignature);
+    }
     
     const verified = verifyLicense(license_key);
     if (!verified) {
@@ -236,6 +260,7 @@ app.post('/validate', async (req, res) => {
     }
     
     const { licenseId, expiry } = verified;
+    
     
     // Get license from Realtime Database using licenseId only
     const snapshot = await db.ref(`license/${licenseId}`).once('value');
