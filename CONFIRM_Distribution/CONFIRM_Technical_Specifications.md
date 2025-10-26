@@ -1,6 +1,18 @@
 # CONFIRM Statistical Validation Engine
 ## Technical Specifications
 
+**Copyright (c) 2024 TraceSeis, Inc. All rights reserved.**
+
+This software and associated documentation files (the "Software") are proprietary and confidential to TraceSeis, Inc. and its affiliates. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties.
+
+**Contact Information:**
+- Email: info@traceseis.com or alvarochf@traceseis.com
+- Created by: Alvaro Chaveste (deltaV solutions)
+
+Unauthorized copying, distribution, or modification of this Software is strictly prohibited and may result in severe civil and criminal penalties.
+
+---
+
 ### **Software Information**
 - **Application Name**: CONFIRM Statistical Validation Engine
 - **Version**: 1.0.0
@@ -194,17 +206,16 @@
 - **Authentication**: Token-based authentication
 
 #### **License Tiers**
-- **Student Annual**: 1-year license
-- **Startup Monthly**: Monthly subscription
-- **Professional**: Monthly/Yearly options
-- **Enterprise**: Monthly/Yearly with manual approval
-- **Integration Annual**: 1-year integration license
-- **White-label Annual**: 1-year white-label license
+- **Professional Monthly**: Monthly subscription license
+- **Professional Yearly**: Annual professional license
+- **Enterprise**: Enterprise license with manual approval
+- **Enterprise Yearly**: Annual enterprise license
+- **Trial Version**: Limited trial license
 
 ### **Support Information**
 
 #### **Contact Details**
-- **Email**: info@deltavsolutions.com
+- **Email**: info@traceseis.com or alvarochf@traceseis.com
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
 - **Support Hours**: Business hours (EST)
 
@@ -215,4 +226,4 @@
 
 ---
 
-*These technical specifications are based on the actual implementation of CONFIRM Statistical Validation Engine v1.0. For technical support, contact info@deltavsolutions.com.*
+*These technical specifications are based on the actual implementation of CONFIRM Statistical Validation Engine v1.0. For technical support, contact info@traceseis.com.*

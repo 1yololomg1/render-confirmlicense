@@ -1,6 +1,18 @@
 # CONFIRM Statistical Validation Engine v1.0
 ## User Manual & Documentation
 
+**Copyright (c) 2024 TraceSeis, Inc. All rights reserved.**
+
+This software and associated documentation files (the "Software") are proprietary and confidential to TraceSeis, Inc. and its affiliates. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties.
+
+**Contact Information:**
+- Email: info@traceseis.com or alvarochf@traceseis.com
+- Created by: Alvaro Chaveste (deltaV solutions)
+
+Unauthorized copying, distribution, or modification of this Software is strictly prohibited and may result in severe civil and criminal penalties.
+
+---
+
 ### **Overview**
 CONFIRM Statistical Validation Engine is a professional statistical analysis platform designed for comprehensive data validation and contingency analysis. The software provides advanced statistical processing capabilities with hardware-bound licensing for commercial use.
 
@@ -33,7 +45,7 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 
 #### **License Information**
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
-- **Contact**: info@deltavsolutions.com
+- **Contact**: info@traceseis.com or alvarochf@traceseis.com
 - **Security**: Each license is bound to one computer only
 - **Validation**: Automatic online license verification
 
@@ -171,7 +183,7 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 ### **Support & Contact**
 
 #### **Technical Support**
-- **Email**: info@deltavsolutions.com
+- **Email**: info@traceseis.com or alvarochf@traceseis.com
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
 - **Documentation**: This user manual
 
@@ -215,4 +227,4 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 
 ---
 
-*This documentation is based on the actual functionality implemented in CONFIRM Statistical Validation Engine v1.0. For technical support or license inquiries, contact info@deltavsolutions.com.*
+*This documentation is based on the actual functionality implemented in CONFIRM Statistical Validation Engine v1.0. For technical support or license inquiries, contact info@traceseis.com.*

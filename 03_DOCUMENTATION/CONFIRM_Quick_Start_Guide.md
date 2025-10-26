@@ -1,6 +1,18 @@
 # CONFIRM Statistical Validation Engine
 ## Quick Start Guide
 
+**Copyright (c) 2024 TraceSeis, Inc. All rights reserved.**
+
+This software and associated documentation files (the "Software") are proprietary and confidential to TraceSeis, Inc. and its affiliates. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties.
+
+**Contact Information:**
+- Email: info@traceseis.com or alvarochf@traceseis.com
+- Created by: Alvaro Chaveste (deltaV solutions)
+
+Unauthorized copying, distribution, or modification of this Software is strictly prohibited and may result in severe civil and criminal penalties.
+
+---
+
 ### **Getting Started in 5 Minutes**
 
 #### **1. Launch the Application**
@@ -121,7 +133,7 @@
 - Ensure stable internet connection
 
 ### **Need Help?**
-- **Email**: info@deltavsolutions.com
+- **Email**: info@traceseis.com or alvarochf@traceseis.com
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
 - **Full Manual**: See CONFIRM_User_Manual.md
 

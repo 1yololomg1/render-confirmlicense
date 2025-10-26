@@ -4,6 +4,12 @@
   "description": "CONFIRM License Management Server",
   "main": "server.mjs",
   "type": "module",
+  "copyright": "Copyright (c) 2024 TraceSeis, Inc. All rights reserved.",
+  "author": {
+    "name": "Alvaro Chaveste (deltaV solutions)",
+    "email": "alvarochf@traceseis.com",
+    "company": "TraceSeis, Inc."
+  },
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
