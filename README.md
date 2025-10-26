@@ -1,5 +1,17 @@
 # CONFIRM License Management Server
 
+**Copyright (c) 2024 TraceSeis, Inc. All rights reserved.**
+
+This software and associated documentation files (the "Software") are proprietary and confidential to TraceSeis, Inc. and its affiliates. The Software is protected by copyright laws and international copyright treaties, as well as other intellectual property laws and treaties.
+
+**Contact Information:**
+- Email: info@traceseis.com or alvarochf@traceseis.com
+- Created by: Alvaro Chaveste (deltaV solutions)
+
+Unauthorized copying, distribution, or modification of this Software is strictly prohibited and may result in severe civil and criminal penalties.
+
+---
+
 A Node.js server for managing CONFIRM software licenses with Stripe payment integration and Firebase database.
 
 ## Deployment on Render

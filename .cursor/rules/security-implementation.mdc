@@ -1,5 +1,5 @@
 ---
-description: Comprehensive analysis of multi-layered security implementation for software protection and license validation
+description: For analyzing software security, anti-tampering, and license protection mechanisms in commercial applications
 ---
 
 # === USER INSTRUCTIONS ===
@@ -40,63 +40,110 @@ Security Implementation Rules:
 $END$
 
  If you're using this file in context, clearly say in italics in one small line that "Context added by Giga security-implementation" along with specifying exactly what information was used from this file in a human-friendly way, instead of using kebab-case use normal sentence case.
-# === END USER INSTRUCTIONS ===
 
+---
+description: Comprehensive analysis of multi-layered security implementation for software protection and license validation
+---
 # security-implementation
-
 IMPORTANCE SCORE: 85/100
-
 ## Core Security Architecture
-
 ### Hardware-Based Protection
 - Machine-specific binding using multiple hardware identifiers:
   - CPU fingerprinting
   - Motherboard serial extraction
   - BIOS identification
   - MAC address validation
-
 ### Anti-Tampering System
 Located in `01_SOURCE_CODE/protection_module.py`:
 - Runtime integrity monitoring
 - Memory protection mechanisms
 - Session-based validation cache
 - Anti-debugging implementation
-
 ### Virtualization Detection
 - Active VM/sandbox environment detection
 - Runtime environment validation
 - Execution context verification
-
 ## License Validation Framework
-
 ### Key Structure
 Implemented in `original_server.mjs`:
 - Format: licenseId:expiryDate:signature
 - Cryptographic signature validation
 - Multi-stage verification process
-
 ### Protection Layers
 - Encrypted local storage for license data
 - Hardware fingerprint verification
 - License tier enforcement (Student/Professional/Enterprise)
 - Rate limiting implementation
-
 ### Migration System
 - Legacy key conversion
 - Hardware rebinding protocols
 - Validation cache management
-
 ## Runtime Security
-
 ### Integrity Checks
 - Continuous runtime validation
 - Memory space protection
 - Execution flow verification
-
 ### Anti-Reverse Engineering
 - Code protection measures
 - Debug prevention
 - Memory tampering detection
+$END$
+# === END USER INSTRUCTIONS ===
+
+# security-implementation
+
+## Core Protection Layer (Importance: 95/100)
+
+The protection system implements a multi-layered security approach:
+
+1. Hardware Fingerprinting
+- CPU ID extraction and validation
+- Motherboard serial number binding
+- MAC address verification and hashing
+- Combined hardware signature generation
+
+2. Anti-Tampering Measures
+- Runtime memory protection
+- Code integrity validation
+- Secure memory cleanup protocols
+- Process isolation enforcement
+
+3. VM/Sandbox Detection
+- Virtual machine environment detection
+- Sandbox analysis and blocking
+- Hardware virtualization checks
+- System authenticity validation
+
+## License Validation Layer (Importance: 90/100)
+
+Cryptographic validation system:
+- License key verification with embedded expiration
+- Hardware signature binding validation
+- Tiered access control enforcement
+- Runtime integrity monitoring
+- Revocation status checking
+
+Key Protection Features:
+- Memory protection against dumping
+- Anti-debug mechanisms
+- Code obfuscation integration
+- Secure storage of validation keys
+
+## Server-Side Security (Importance: 85/100)
+
+The license management server implements:
+- Secure key generation protocols
+- Hardware binding validation
+- License revocation tracking
+- Usage pattern analysis
+- Anomaly detection systems
+
+Protected endpoints handle:
+- License activation workflows
+- Hardware signature verification
+- Tier access management
+- Migration validation
+- Security audit logging
 
 $END$
 

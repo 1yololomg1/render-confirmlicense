@@ -1,0 +1,59 @@
+BUILD NEW CONFIRM.EXE - INSTRUCTIONS
+=====================================
+
+Copyright (c) 2024 TraceSeis, Inc. All rights reserved.
+
+OVERVIEW:
+=========
+This will create a new CONFIRM.exe that includes all recent updates:
+- Updated copyright headers in all source files
+- Corrected documentation references
+- Fixed license tier information  
+- Updated contact information (info@traceseis.com)
+
+REQUIREMENTS:
+=============
+- Python 3.8+ installed
+- PyInstaller installed (pip install pyinstaller)
+- All dependencies installed (pandas, numpy, matplotlib, etc.)
+
+BUILD OPTIONS:
+==============
+
+OPTION 1: Batch Script (Windows)
+- Run: build_new_exe.bat
+- Double-click the file or run from command prompt
+
+OPTION 2: Python Script (Cross-platform)  
+- Run: python build_new_exe.py
+- Works on Windows, Mac, Linux
+
+BUILD PROCESS:
+==============
+1. Script checks for PyInstaller
+2. Builds executable with all updates
+3. Outputs to CONFIRM_Distribution_Optimized folder
+4. Replaces old EXE with new version
+
+WHAT'S INCLUDED IN NEW EXE:
+===========================
+- All source code with updated copyright headers
+- Protection module with copyright headers
+- License manager with updated contact info
+- All statistical analysis functionality
+- Hardware binding and validation
+- Updated license tier handling
+
+AFTER BUILDING:
+===============
+- New CONFIRM.exe will be in CONFIRM_Distribution_Optimized folder
+- Ready for client deployment
+- Includes all recent changes and fixes
+
+SUPPORT:
+========
+- Email: info@traceseis.com
+- Created by: Alvaro Chaveste (deltaV solutions)
+
+=====================================
+© 2024 TraceSeis, Inc. All rights reserved.
