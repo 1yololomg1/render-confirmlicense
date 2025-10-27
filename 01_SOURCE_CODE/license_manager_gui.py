@@ -31,8 +31,16 @@ import platform
 import subprocess
 import re
 import os
+import base64
+from cryptography.fernet import Fernet
+from pathlib import Path
 
 class LicenseManagerGUI:
+    # File paths for saved credentials
+    CREDENTIALS_DIR = Path.home() / ".confirm_license_manager"
+    ADMIN_KEY_FILE = CREDENTIALS_DIR / "admin_key.enc"
+    MASTER_KEY_FILE = CREDENTIALS_DIR / "master_key.key"
+    
     def __init__(self, root):
         self.root = root
         self.root.title("CONFIRM License Management System")
@@ -41,12 +49,84 @@ class LicenseManagerGUI:
         
         # API Configuration - load from environment or config
         self.api_base_url = os.getenv('LICENSE_API_URL', 'http://localhost:3000')
-        self.admin_key = os.getenv('ADMIN_SECRET_KEY')
+        self.admin_key = None
+        self.saved_admin_key = None
         self.licenses_data = []
         self.local_mode = True  # Enable local testing mode
         
+        # Create credentials directory if it doesn't exist
+        self.CREDENTIALS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Try to load saved admin key
+        self.load_saved_admin_key()
+        
         # Create the interface
         self.create_widgets()
+        
+        # Pre-populate admin key entry if saved key exists
+        if self.saved_admin_key:
+            self.admin_key_entry.insert(0, self.saved_admin_key)
+        
+    def get_or_create_master_key(self):
+        """Get or create the master encryption key"""
+        if self.MASTER_KEY_FILE.exists():
+            with open(self.MASTER_KEY_FILE, 'rb') as f:
+                return f.read()
+        else:
+            # Generate new master key
+            key = Fernet.generate_key()
+            with open(self.MASTER_KEY_FILE, 'wb') as f:
+                f.write(key)
+            return key
+    
+    def save_admin_key(self, admin_key):
+        """Save admin key to encrypted file
+        
+        Returns:
+            bool: True if save succeeded, False otherwise
+        """
+        try:
+            master_key = self.get_or_create_master_key()
+            cipher = Fernet(master_key)
+            encrypted_key = cipher.encrypt(admin_key.encode())
+            
+            with open(self.ADMIN_KEY_FILE, 'wb') as f:
+                f.write(encrypted_key)
+            self.saved_admin_key = admin_key
+            return True
+        except Exception as e:
+            print(f"Failed to save admin key: {e}")
+            return False
+    
+    def load_saved_admin_key(self):
+        """Load saved admin key from encrypted file"""
+        try:
+            if self.ADMIN_KEY_FILE.exists() and self.MASTER_KEY_FILE.exists():
+                master_key = self.get_or_create_master_key()
+                cipher = Fernet(master_key)
+                
+                with open(self.ADMIN_KEY_FILE, 'rb') as f:
+                    encrypted_key = f.read()
+                
+                decrypted_key = cipher.decrypt(encrypted_key).decode()
+                self.saved_admin_key = decrypted_key
+        except Exception as e:
+            print(f"Failed to load saved admin key: {e}")
+            self.saved_admin_key = None
+    
+    def clear_saved_credentials(self):
+        """Clear saved admin credentials"""
+        try:
+            if self.ADMIN_KEY_FILE.exists():
+                self.ADMIN_KEY_FILE.unlink()
+            if self.MASTER_KEY_FILE.exists():
+                self.MASTER_KEY_FILE.unlink()
+            self.saved_admin_key = None
+            self.admin_key_entry.delete(0, tk.END)
+            self.creds_status_label.config(text="")  # Clear status label
+            messagebox.showinfo("Success", "Saved credentials cleared")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to clear credentials: {e}")
         
     def create_widgets(self):
         """Create the main interface widgets"""
@@ -94,10 +174,30 @@ class LicenseManagerGUI:
                                        fg="#2d3748", relief="solid", bd=1)
         self.admin_key_entry.pack(pady=(5, 10), ipady=8, fill="x")
         
-        tk.Button(key_frame, text="Load System Statistics", 
+        # Button frame
+        button_frame = tk.Frame(key_frame, bg="#f8f9fa")
+        button_frame.pack(fill="x")
+        
+        tk.Button(button_frame, text="Load System Statistics", 
                  command=self.load_system_stats,
                  font=("Arial", 11, "bold"), bg="#2b6cb0", fg="white",
-                 padx=20, pady=8, relief="flat", cursor="hand2").pack(pady=(0, 10))
+                 padx=20, pady=8, relief="flat", cursor="hand2").pack(side="left", padx=(0, 10))
+        
+        # Clear saved credentials button
+        tk.Button(button_frame, text="Clear Saved Credentials", 
+                 command=self.clear_saved_credentials,
+                 font=("Arial", 10), bg="#e2e8f0", fg="#4a5568",
+                 padx=15, pady=8, relief="flat", cursor="hand2").pack(side="left")
+        
+        # Show status if credentials are saved
+        self.creds_status_label = tk.Label(key_frame, text="", 
+                                          font=("Arial", 9, "italic"), 
+                                          bg="#f8f9fa", fg="#059669")
+        self.creds_status_label.pack(anchor="w", pady=(5, 0))
+        
+        # Update status label if credentials are saved
+        if self.saved_admin_key:
+            self.creds_status_label.config(text="Using saved credentials")
         
         # Statistics display
         self.stats_frame = tk.LabelFrame(overview_frame, text="System Statistics", 
@@ -390,7 +490,13 @@ class LicenseManagerGUI:
                     result = response.json()
                     # Your API returns licenses directly, not wrapped in success/stats
                     if 'licenses' in result:
-                        self.display_stats_from_licenses(result['licenses'])
+                        # Save admin key after successful authentication
+                        save_success = self.save_admin_key(admin_key)
+                        if save_success:
+                            self.root.after(0, lambda: self.creds_status_label.config(text="Using saved credentials"))
+                        else:
+                            self.root.after(0, lambda: self.creds_status_label.config(text="WARNING: Credentials not saved (check permissions)"))
+                        self.root.after(0, lambda: self.display_stats_from_licenses(result['licenses']))
                     else:
                         self.root.after(0, lambda: messagebox.showerror("Error", "No licenses data received"))
                 else:

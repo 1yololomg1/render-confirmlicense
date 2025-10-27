@@ -1,5 +1,5 @@
 ---
-description: Technical specifications for security implementation and anti-tampering mechanisms in software licensing systems
+description: Security implementation analysis for software protection and license validation systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -91,44 +91,56 @@ $END$
 # === END USER INSTRUCTIONS ===
 
 # security-implementation
+
 Importance Score: 85/100
 
-Multi-layer security architecture implementing three core protection mechanisms:
+## Multi-Layer Protection System
+Located in: 01_SOURCE_CODE/protection_module.py
 
-1. Hardware-Based License Binding
-- Composite hardware fingerprinting using:
-  - CPU ID validation
-  - Motherboard serial tracking
-  - BIOS identifier verification
-  - MAC address binding
-- Automatic binding on first activation
-Location: 01_SOURCE_CODE/license_manager_gui.py
+1. Hardware Fingerprinting Layer
+- Composite hardware identifier using CPU ID, motherboard serial, BIOS serial, MAC address
+- Hardware-bound license validation with unique device signatures
 
-2. Runtime Protection Measures
-- Memory integrity monitoring system
-- Anti-debugging protection for common debugger tools
-- Virtual machine/sandbox environment detection
-- Prevention of API hooking attempts
-- Execution path validation checks
-Location: 01_SOURCE_CODE/protection_module.py
+2. Anti-Tampering Layer
+- Runtime monitoring for statistical software protection
+- Memory protection mechanisms for statistical calculations
+- Detection of analysis tools and debugging attempts
 
-3. Cryptographic License Validation
-- Secure key format structure: {license_id}:{expiry_date}:{signature}
-- Tiered validation workflow:
-  - Hardware binding verification
-  - Expiration checks
-  - Grace period management (72h offline tolerance)
-- Encrypted local license cache storage
-Location: server.mjs
+3. Virtual Machine Detection
+- Custom security checks for sandbox environments
+- VM detection specific to statistical software protection
+- Runtime environment validation
 
-Core Security Features:
-- Single machine activation enforcement
-- Automatic hardware fingerprint locking
-- Secure offline grace period handling
-- License revocation capabilities
-- Anti-reverse engineering protections
-- Encrypted storage for license data
-- Migration path security for legacy systems
+## License Security Implementation
+Located in: server.mjs
+
+1. Key Generation System
+- Format: {license_id}:{expiry_date}:{signature}
+- Custom security token generation for administrative operations
+- Multi-tier validation with permission levels
+
+2. Hardware Binding
+- Grace period implementation for offline validation
+- Hardware signature verification workflow
+- Migration system for legacy key formats
+
+3. Access Control
+- Role-based administrative interface
+- Tiered license validation (Student, Startup, Professional, Enterprise)
+- Protected execution environment for statistical operations
+
+## Runtime Protection
+Located in: 01_SOURCE_CODE/license_manager_gui.py
+
+1. License Validation Workflow
+- Hardware-bound verification process
+- Custom migration paths for legacy formats
+- Secure storage of statistical processing results
+
+2. Administrative Security
+- Role-based access control for license management
+- Protected administrative operations
+- Security token validation for management functions
 
 $END$
 

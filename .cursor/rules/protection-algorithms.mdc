@@ -1,5 +1,5 @@
 ---
-description: Specification for anti-tampering protection algorithms, hardware fingerprinting, and runtime integrity verification
+description: Documents hardware fingerprinting, anti-debugging, and runtime protection mechanisms for statistical software
 ---
 
 # === USER INSTRUCTIONS ===
@@ -89,40 +89,42 @@ $END$
 
 # protection-algorithms
 
-## Core Protection Systems
-Importance Score: 90/100
-
-Hardware Fingerprinting Algorithm:
-- Composite machine identification using multiple hardware identifiers:
-  - CPU ID extraction
-  - Motherboard Serial Number
-  - BIOS ID retrieval
-  - MAC Address binding
-- Implementation in 01_SOURCE_CODE/protection_module.py
-
-Runtime Protection Mechanisms:
-- Memory integrity monitoring for critical code segments
-- Anti-debugging detection system targeting common debugger tools
-- Virtual machine/sandbox environment detection
-- API hook prevention mechanisms
-- Execution path validation checks
-
-## License Protection Implementation
 Importance Score: 85/100
 
-Anti-Tampering Features:
-- Hardware-based license binding using composite fingerprints
-- Encrypted license caching system
-- Secure storage mechanisms for license data
-- Grace period management with offline validation support
-- Implementation in 01_SOURCE_CODE/license_manager_gui.py
+## Hardware Fingerprinting System
+Location: `01_SOURCE_CODE/protection_module.py`
 
-License Validation Security:
-- Secure key format structure: {license_id}:{expiry_date}:{signature}
-- Automatic hardware binding on first activation
-- License migration validation between versions
-- Tiered access control enforcement
-- Revocation mechanism support
+Multi-layered hardware identifier collection:
+- CPU ID extraction
+- Motherboard serial number capture
+- BIOS serial number retrieval
+- MAC address collection
+
+## Anti-Debugging Protection
+Location: `01_SOURCE_CODE/protection_module.py`
+
+Statistical software-specific protections:
+- Runtime monitoring for analysis tool detection
+- Active debugger presence checks
+- Virtual machine environment detection
+- Sandbox execution prevention
+
+## Runtime Integrity Verification
+Location: `01_SOURCE_CODE/protection_module.py`
+
+Memory protection mechanisms:
+- Statistical calculation runtime protection
+- Secure storage of analysis results
+- Protected execution environment monitoring
+- Anti-tampering checks for statistical operations
+
+## Integration Points
+
+Hardware binding validation workflow:
+- Grace period implementation for offline validation
+- Multi-layer fingerprint verification
+- Hardware identifier mutation detection
+- Runtime memory protection for statistical operations
 
 $END$
 
