@@ -185,37 +185,45 @@ $END$
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The system implements a comprehensive software protection and license management solution with an importance score of 85/100, focusing on three core components:
+## Core Business System (Importance: 85/100)
 
-1. Hardware-Based License Management
-- Hardware fingerprinting using CPU, Motherboard, BIOS, and MAC identifiers
-- Tiered licensing system (Student/Professional/Enterprise)
-- Encrypted license caching and secure storage
-- Migration support for legacy license formats
+The system implements a protected statistical analysis platform with hardware-bound licensing across three main components:
 
-2. Anti-Tampering Protection 
-- Runtime memory integrity verification
-- Anti-debugging and sandbox detection
-- API hook prevention mechanisms
-- Execution path validation
-- Hardware fingerprint enforcement
+### License Protection Engine (01_SOURCE_CODE/protection_module.py)
+- Hardware-based fingerprinting using CPU, motherboard, BIOS, and MAC identifiers
+- Statistical software-specific anti-tampering mechanisms
+- Runtime analysis tool detection
+- Virtual machine and sandbox detection routines
 
-3. License Server Architecture
-- Secure license format: {license_id}:{expiry_date}:{signature}
-- Hardware binding verification
-- 72-hour offline grace period management
-- License revocation and transfer handling
-- Automatic binding on initial activation
+### License Management Platform (01_SOURCE_CODE/license_manager_gui.py)
+- Multi-tier license system (Student, Startup, Professional, Enterprise)
+- Hardware-bound validation workflows
+- Legacy license format migration
+- Role-based administrative controls
 
-Key Integration Points:
-- License validation workflow connects client protection module with server
-- Hardware fingerprinting links protection module to license management
-- License migration system bridges legacy and current implementations
+### License Server (server.mjs)
+- License key generation with format: {license_id}:{expiry_date}:{signature}
+- Hardware binding with grace period support
+- Legacy key migration handling
+- Multi-tier permission validation
+- Administrative security token generation
 
-Critical Business Files:
-- 01_SOURCE_CODE/license_manager_gui.py
-- 01_SOURCE_CODE/protection_module.py
-- server.mjs
+## Key Business Workflows
+
+1. License Protection:
+- Multi-layered hardware fingerprinting
+- Statistical software-specific debugging prevention
+- Runtime memory protection for calculations
+
+2. License Operations:
+- Hardware-bound licensing with offline grace periods
+- Legacy license migration paths
+- Feature access control by license tier
+
+3. Statistical Processing:
+- License-restricted feature access
+- Secure statistical result storage
+- Protected calculation environment
 
 $END$
 

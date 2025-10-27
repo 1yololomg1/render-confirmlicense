@@ -3940,6 +3940,39 @@ class StatisticalAnalyzer:
         except Exception as e:
             pass
     
+    def show_message_safely(self, message_type, title, message):
+        """Thread-safe message box display"""
+        if threading.current_thread() is threading.main_thread():
+            if message_type == "error":
+                return messagebox.showerror(title, message)
+            elif message_type == "warning":
+                return messagebox.showwarning(title, message)
+            elif message_type == "info":
+                return messagebox.showinfo(title, message)
+            else:
+                return messagebox.showinfo(title, message)
+        else:
+            result_container = []
+            completed = threading.Event()
+            
+            def show_on_main():
+                try:
+                    if message_type == "error":
+                        result = messagebox.showerror(title, message)
+                    elif message_type == "warning":
+                        result = messagebox.showwarning(title, message)
+                    elif message_type == "info":
+                        result = messagebox.showinfo(title, message)
+                    else:
+                        result = messagebox.showinfo(title, message)
+                    result_container.append(result)
+                finally:
+                    completed.set()
+            
+            self.root.after(0, show_on_main)
+            completed.wait(timeout=5.0)  # Prevent deadlock
+            return result_container[0] if result_container else None
+    
     def auto_resize_to_content(self):
         """Automatically resize window to fit content optimally"""
         try:
@@ -4140,7 +4173,7 @@ class StatisticalAnalyzer:
     def batch_process_selected_sheets(self, selected_sheets):
         """The missing method that provides robust batch processing with thread safety"""
         if not self.excel_file:
-            messagebox.showerror("Error", "Please load an Excel file first.")
+            self.show_message_safely("error", "Error", "Please load an Excel file first.")
             return
             
         if self.processing_state:
@@ -6288,7 +6321,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             pass
         
         def show_error():
-            messagebox.showerror("Error", full_msg)
+            self.show_message_safely("error", "Error", full_msg)
             self.update_progress_status(f"{context} failed", complete=True)
         
         self.root.after(0, show_error)
@@ -6475,7 +6508,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def show_sheet_selection_dialog(self):
         """Show dialog for selecting which sheets to analyze"""
         if not self.excel_file:
-            messagebox.showerror("Error", "Please load an Excel file first.")
+            self.show_message_safely("error", "Error", "Please load an Excel file first.")
             return None
         
         # Create dialog with configuration
@@ -6851,7 +6884,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def _analyze_selected(self, tree, checked_items):
         """Handle analyze button click"""
         if not checked_items:
-            messagebox.showwarning("No Selection", "Please select at least one sheet to analyze.")
+            self.show_message_safely("warning", "No Selection", "Please select at least one sheet to analyze.")
             return
         
         # Get selected sheet names
@@ -7107,7 +7140,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def batch_analyze_selected_sheets_threaded(self):
         """Process selected sheets with improved UI"""
         if not self.excel_file:
-            messagebox.showerror("Error", "Please load an Excel file first.")
+            self.show_message_safely("error", "Error", "Please load an Excel file first.")
             return
         
         # Show sheet selection dialog
@@ -7228,7 +7261,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                     if hasattr(self, 'batch_results') and self.batch_results:
                         self.open_visualization_window()
                     else:
-                        messagebox.showerror("No Valid Data", "No sheets contained valid data for analysis.")
+                        self.show_message_safely("error", "No Valid Data", "No sheets contained valid data for analysis.")
                 
                 self.root.after(0, update_ui)
                 
@@ -7240,7 +7273,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def batch_process_all_sheets_threaded(self):
         """Process all sheets in the Excel file and create comparison analysis"""
         if not self.excel_file:
-            messagebox.showerror("Error", "Please load an Excel file first.")
+            self.show_message_safely("error", "Error", "Please load an Excel file first.")
             return
             
         if self.processing_state:

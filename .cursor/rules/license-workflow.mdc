@@ -1,5 +1,5 @@
 ---
-description: Specification for commercial software license management system workflows and state transitions
+description: Documentation of license lifecycle management and state transitions for software protection systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -102,56 +102,64 @@ $END$
 
 # license-workflow
 
-## License State Machine (Importance: 95/100)
+License State Management
+Importance Score: 85/100
 
-Core workflow states and transitions:
-1. Creation & Initial Binding
-- Generates unique license on first activation
-- Automatically binds to hardware using composite fingerprint
-- Stores binding in secure format: {license_id}:{expiry_date}:{signature}
+Core License States:
+1. Creation
+- Hardware fingerprinting using CPU ID, motherboard serial, BIOS serial, MAC address
+- Key format: {license_id}:{expiry_date}:{signature}
+- Tier-specific permission assignment (Student, Startup, Professional, Enterprise)
 
-2. Validation Sequence
-- Validates hardware binding matches stored fingerprint
-- Checks expiration status and grace periods
-- Verifies license tier permissions
-- Handles offline validation (72-hour grace period)
+2. Validation
+- Multi-layer hardware binding verification
+- Offline grace period implementation
+- Runtime monitoring for analysis tools/debugging attempts
+- Virtual machine/sandbox detection
 
-3. Migration Handling
-- Supports transitions between legacy and new formats
-- Preserves binding and expiration data during migration
-- Maintains tier permissions across versions
+3. Revocation
+- Administrative interface with role-based access
+- Security token validation for admin operations
+- Hardware binding violation tracking
 
-4. Revocation Process
-- Server-side revocation management
-- Handles license transfers between machines
-- Enforces single-machine activation policy
+4. Migration
+- Legacy license format conversion system
+- Hardware profile transfer workflow
+- Tier-specific feature preservation
 
-## License Types & Rules (Importance: 85/100)
+State Transitions:
 
-Tiered License Structure:
-1. Student
-2. Professional 
-3. Enterprise
+1. Active → Grace Period
+- Triggered by hardware binding mismatch
+- Temporary permission maintenance
+- Limited operation timeframe
 
-Each tier implements:
-- Specific feature access controls
-- Custom validation workflows
-- Unique grace period handling
-- Tier-specific migration rules
+2. Grace Period → Revoked
+- Grace period expiration
+- Hardware validation failure
+- Security violation detection
 
-## Hardware Binding Components (Importance: 90/100)
+3. Legacy → Current
+- Format conversion process
+- Hardware profile reassignment
+- Permission level mapping
 
-Composite Fingerprint Elements:
-- CPU ID
-- Motherboard Serial
-- BIOS ID
-- MAC Address
+Primary Components:
 
-Binding Implementation:
-- First activation locks to hardware profile
-- Cached in encrypted local storage
-- Verified during runtime validation
-- Used for transfer/migration decisions
+1. Protection Module (01_SOURCE_CODE/protection_module.py)
+- Hardware fingerprint generation
+- Runtime security monitoring
+- Anti-tampering implementation
+
+2. License Manager GUI (01_SOURCE_CODE/license_manager_gui.py)
+- Administrative control interface
+- Migration workflow handling
+- Tier management system
+
+3. License Server (server.mjs)
+- Key generation and validation
+- State transition management
+- Security token handling
 
 $END$
 
