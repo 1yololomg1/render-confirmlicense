@@ -1,4 +1,4 @@
-# CONFIRM License Management Server
+# CONFIRM Statistical Validation Engine
 
 **Copyright (c) 2024 TraceSeis, Inc. All rights reserved.**
 
@@ -12,11 +12,27 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 
 ---
 
-A Node.js server for managing CONFIRM software licenses with Stripe payment integration and Firebase database.
+A professional machine learning model validation tool that transforms clustering analysis results into statistical validation metrics. CONFIRM specializes in validating Self-Organizing Maps (SOMs) and other clustering algorithms by converting neuron assignments into confusion matrices and calculating comprehensive performance statistics.
 
-## Deployment on Render
+## What CONFIRM Does
 
-This server is configured for deployment on Render.com with the following setup:
+### Core Functionality
+- **Machine Learning Model Validation**: Converts clustering results into confusion matrices
+- **SOM Performance Analysis**: Evaluates Self-Organizing Map effectiveness  
+- **Statistical Metrics**: Calculates precision, recall, F1-score, Chi-square, Cramer's V
+- **Visualization Suite**: Generates heatmaps, radar charts, and distribution plots
+- **Batch Processing**: Analyze multiple worksheets simultaneously
+
+### Data Input Format
+- **Excel Files (.xlsx/.xls)**: Clustering results with neurons/units and category assignments
+- **Structure**: First column = Unit IDs, other columns = category types with sample counts
+- **Output**: Comprehensive statistical validation reports and visualizations
+
+---
+
+## License Server Deployment (Supporting Infrastructure)
+
+The license validation server is configured for deployment on Render.com with the following setup:
 
 ### Required Environment Variables
 

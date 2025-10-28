@@ -104,10 +104,28 @@ class CommercialProtection:
             "C:\\Program Files (x86)",
             os.path.expanduser("~\\AppData\\Local"),
             os.path.expanduser("~\\Desktop"),
-            os.path.expanduser("~\\Documents")
+            os.path.expanduser("~\\Documents"),
+            # Allow execution from development/test directories
+            "CONFIRM_Distribution_Optimized",
+            "OneDrive",
+            # Allow execution from current directory (for testing)
+            os.getcwd(),
         ]
         
-        return any(path.startswith(valid_path) for valid_path in valid_paths)
+        # Check if path contains any valid path segment
+        path_normalized = path.replace("\\", "/").lower()
+        for valid_path in valid_paths:
+            valid_normalized = str(valid_path).replace("\\", "/").lower()
+            if valid_normalized in path_normalized or path_normalized.startswith(valid_normalized):
+                return True
+        
+        # For PyInstaller temp directory, always allow
+        if "_MEI" in path:
+            return True
+        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
+            return True
+            
+        return False
     
     def _verify_file_integrity(self):
         """Verify executable file integrity"""

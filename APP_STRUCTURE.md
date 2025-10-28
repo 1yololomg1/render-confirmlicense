@@ -1,7 +1,7 @@
 # CONFIRM Application Structure & Scaffold
 
 ## Overview
-CONFIRM is a commercial statistical analysis software suite with integrated hardware-bound license management, developed by TraceSeis, Inc. (deltaV solutions division).
+CONFIRM is a professional machine learning model validation tool that specializes in transforming clustering analysis results into statistical validation metrics. The software converts Self-Organizing Map (SOM) outputs and other clustering results into confusion matrices, calculating comprehensive performance statistics including precision, recall, F1-scores, and Chi-square tests. Developed by TraceSeis, Inc. (deltaV solutions division).
 
 **Version:** 1.0.0  
 **License:** Commercial (TraceSeis, Inc.)  
@@ -39,21 +39,21 @@ CONFIRM is a commercial statistical analysis software suite with integrated hard
 ### 1. Client Application (`01_SOURCE_CODE/`)
 
 #### 1.1 Main Application (`CONFIRM_Integrated.py`)
-**Purpose:** Primary statistical analysis engine with GUI
+**Purpose:** Machine learning model validation engine with professional GUI
 
 **Key Classes:**
-- `StatisticalAnalyzer` - Main application class managing all features
-- `LicenseEncryptionManager` - Handles encrypted license storage
+- `StatisticalAnalyzer` - Main application class for clustering validation
+- `LicenseEncryptionManager` - Handles encrypted license storage  
 - `LicenseValidator` - License validation and caching
 
 **Key Features:**
-- Excel file processing (multi-sheet support)
-- Statistical analysis (Chi-square, Correlation, Contingency)
-- Quality Control (QC) grading system
-- Hardware fingerprinting
-- License validation (online/offline)
-- Batch processing with threading
-- Visualization generation (matplotlib/seaborn)
+- **Clustering Model Validation**: Converts SOM/clustering results to confusion matrices
+- **Statistical Analysis**: Chi-square, Cramer's V, precision, recall, F1-score calculations
+- **Excel Processing**: Multi-sheet batch processing of clustering results
+- **Performance Metrics**: Classification accuracy and model effectiveness evaluation
+- **Visualization Suite**: Heatmaps, radar charts, distribution plots
+- **Quality Control**: QC grading system for model performance
+- **Batch Processing**: Multi-threaded analysis of multiple datasets
 
 **Main Methods:**
 ```python
@@ -62,11 +62,13 @@ CONFIRM is a commercial statistical analysis software suite with integrated hard
 - check_license_expiry()
 - get_license_info()
 
-# Statistical Analysis
+# Clustering Model Validation
 - process_excel_file()
+- convert_clustering_to_confusion_matrix()
 - analyze_contingency()
+- calculate_som_effectiveness()
 - get_chi_square_qc_summary()
-- calculate_correlation_matrix()
+- calculate_performance_metrics()
 
 # UI Management
 - create_license_panel()
@@ -322,25 +324,25 @@ ADMIN_SECRET_KEY=<admin_key>
 5. Display license status
 ```
 
-### Statistical Analysis Flow
+### Machine Learning Validation Flow
 ```
-1. User selects Excel file
+1. User selects Excel file with clustering results
    ↓
-2. Application loads file
+2. Application loads neuron/category assignment data
    ↓
-3. User selects analysis type
+3. Convert clustering assignments to confusion matrix
    ↓
-4. Process data in thread pool
+4. Calculate validation metrics in thread pool
    ↓
-5. Calculate statistics
+5. Compute precision, recall, F1, Chi-square, Cramer's V
    ↓
-6. Generate QC grading
+6. Generate model performance QC grading
    ↓
-7. Generate visualizations
+7. Create validation visualizations (heatmaps, radar charts)
    ↓
-8. Display results
+8. Display SOM effectiveness and classification results
    ↓
-9. Export options available
+9. Export validation reports and charts
 ```
 
 ---
@@ -379,29 +381,29 @@ abc123def456:2025-12-31T23:59:59Z:a1b2c3d4e5f6
 
 ## Key Functionality
 
-### Statistical Analysis Features
-1. **Contingency Analysis**
-   - Chi-square test
-   - Expected frequencies
-   - Cramer's V calculation
-   - P-value computation
+### Machine Learning Model Validation Features
+1. **Clustering-to-Classification Conversion**
+   - Transform SOM neuron assignments to predictions
+   - Generate confusion matrices from clustering results
+   - Calculate classification metrics from unsupervised learning
 
-2. **Correlation Analysis**
-   - Pearson correlation
-   - Correlation matrix
-   - Significance testing
+2. **Statistical Validation**
+   - Chi-square test for association significance
+   - Cramer's V for association strength
+   - P-value computation for hypothesis testing
+   - Expected vs. observed frequency analysis
 
-3. **Quality Control**
-   - QC grading (A-F)
-   - Composite scoring
-   - Ranking system
+3. **Performance Metrics**
+   - Precision, Recall, F1-score per category
+   - Overall classification accuracy
+   - Model effectiveness scoring
+   - SOM utilization analysis
+
+4. **Quality Control & Comparison**
+   - QC grading (A-F) for model performance
+   - Multi-model comparison and ranking
    - Best configuration recommendation
-
-4. **Comparison Analysis**
-   - Multi-sheet comparison
-   - Performance ranking
-   - Statistical summary
-   - Visualization generation
+   - Cross-validation statistical summaries
 
 ### UI Components
 1. **Main Window**

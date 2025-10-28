@@ -171,6 +171,46 @@ Location: original_server.mjs
 - Quality validation system
 - Results visualization platform
 $END$
+
+# main-overview
+## Development Guidelines
+- Only modify code directly relevant to the specific request. Avoid changing unrelated functionality.
+- Never replace code with placeholders like `# ... rest of the processing ...`. Always include complete code.
+- Break problems into smaller steps. Think through each step separately before implementing.
+- Always provide a complete PLAN with REASONING based on evidence from code and logs before making changes.
+- Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
+## Core Business System (Importance: 85/100)
+The system implements a protected statistical analysis platform with hardware-bound licensing across three main components:
+### License Protection Engine (01_SOURCE_CODE/protection_module.py)
+- Hardware-based fingerprinting using CPU, motherboard, BIOS, and MAC identifiers
+- Statistical software-specific anti-tampering mechanisms
+- Runtime analysis tool detection
+- Virtual machine and sandbox detection routines
+### License Management Platform (01_SOURCE_CODE/license_manager_gui.py)
+- Multi-tier license system (Student, Startup, Professional, Enterprise)
+- Hardware-bound validation workflows
+- Legacy license format migration
+- Role-based administrative controls
+### License Server (server.mjs)
+- License key generation with format: {license_id}:{expiry_date}:{signature}
+- Hardware binding with grace period support
+- Legacy key migration handling
+- Multi-tier permission validation
+- Administrative security token generation
+## Key Business Workflows
+1. License Protection:
+- Multi-layered hardware fingerprinting
+- Statistical software-specific debugging prevention
+- Runtime memory protection for calculations
+2. License Operations:
+- Hardware-bound licensing with offline grace periods
+- Legacy license migration paths
+- Feature access control by license tier
+3. Statistical Processing:
+- License-restricted feature access
+- Secure statistical result storage
+- Protected calculation environment
+$END$
 # === END USER INSTRUCTIONS ===
 
 
@@ -185,45 +225,50 @@ $END$
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-## Core Business System (Importance: 85/100)
+Core system architecture implementing statistical validation and license protection for machine learning applications.
 
-The system implements a protected statistical analysis platform with hardware-bound licensing across three main components:
+## Primary Business Components
 
-### License Protection Engine (01_SOURCE_CODE/protection_module.py)
-- Hardware-based fingerprinting using CPU, motherboard, BIOS, and MAC identifiers
-- Statistical software-specific anti-tampering mechanisms
-- Runtime analysis tool detection
-- Virtual machine and sandbox detection routines
+### Statistical Validation Engine (85/100)
+Located in `01_SOURCE_CODE/protection_module.py`
+- Hardware-based license binding using system identifiers (CPU, motherboard, MAC)
+- Runtime integrity verification with anti-debugging protection
+- VM/sandbox detection system
+- Custom memory tampering detection
 
-### License Management Platform (01_SOURCE_CODE/license_manager_gui.py)
-- Multi-tier license system (Student, Startup, Professional, Enterprise)
-- Hardware-bound validation workflows
-- Legacy license format migration
-- Role-based administrative controls
+### License Management (85/100)
+Located in `server.mjs`
+- Multi-tier license validation with hardware fingerprinting
+- Legacy license migration handling
+- Grace period management
+- Enterprise license validation rules
+- License revocation with audit capabilities
 
-### License Server (server.mjs)
-- License key generation with format: {license_id}:{expiry_date}:{signature}
-- Hardware binding with grace period support
-- Legacy key migration handling
-- Multi-tier permission validation
-- Administrative security token generation
+### Machine Learning Validation (85/100)
+Core statistical analysis functionality:
+- SOM output conversion to confusion matrices
+- Statistical validation metrics:
+  - Chi-square testing for clusters
+  - Cramer's V coefficient analysis
+  - Precision/recall/F1 score calculations
+- Model effectiveness grading (A-F scale)
 
-## Key Business Workflows
+## Domain-Specific Features
 
-1. License Protection:
-- Multi-layered hardware fingerprinting
-- Statistical software-specific debugging prevention
-- Runtime memory protection for calculations
+### License Protection Controls
+- Hardware-bound licensing with 72-hour offline grace periods
+- Tiered access control (Student/Startup/Professional/Enterprise)
+- Anti-tampering mechanisms
 
-2. License Operations:
-- Hardware-bound licensing with offline grace periods
+### Statistical Processing
+- Clustering-to-classification conversion
+- Multi-dimensional statistical validation
+- Model assessment grading system
+
+### Business Rule Implementation
+- Feature access based on license tiers
 - Legacy license migration paths
-- Feature access control by license tier
-
-3. Statistical Processing:
-- License-restricted feature access
-- Secure statistical result storage
-- Protected calculation environment
+- Automated revocation policies
 
 $END$
 

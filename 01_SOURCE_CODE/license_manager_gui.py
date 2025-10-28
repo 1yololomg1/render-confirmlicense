@@ -37,7 +37,12 @@ from pathlib import Path
 
 class LicenseManagerGUI:
     # File paths for saved credentials
-    CREDENTIALS_DIR = Path.home() / ".confirm_license_manager"
+    # Use %LOCALAPPDATA% on Windows, fallback to home directory on other platforms
+    _local_app_data = os.getenv("LOCALAPPDATA")
+    if _local_app_data and platform.system() == "Windows":
+        CREDENTIALS_DIR = Path(_local_app_data) / "CONFIRM_LicenseManager"
+    else:
+        CREDENTIALS_DIR = Path.home() / ".confirm_license_manager"
     ADMIN_KEY_FILE = CREDENTIALS_DIR / "admin_key.enc"
     MASTER_KEY_FILE = CREDENTIALS_DIR / "master_key.key"
     
