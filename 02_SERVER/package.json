@@ -1,7 +1,7 @@
 {
   "name": "confirm-license-server",
   "version": "1.0.0",
-  "description": "CONFIRM License Management Server",
+  "description": "License validation server for CONFIRM Statistical Validation Engine",
   "main": "server.mjs",
   "type": "module",
   "copyright": "Copyright (c) 2024 TraceSeis, Inc. All rights reserved.",

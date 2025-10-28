@@ -78,12 +78,7 @@ FIREBASE_URL = os.getenv("CONFIRM_FIREBASE_URL", "https://confirm-license-manage
 LICENSE_SERVER_URL = os.getenv("CONFIRM_LICENSE_SERVER_URL", "https://render-confirmlicense.onrender.com")
 APP_NAME = "CONFIRM Statistical Validation Engine"
 APP_VERSION = "1.0.0"
-# Use %LOCALAPPDATA% on Windows, fallback to home directory on other platforms
-local_app_data = os.getenv("LOCALAPPDATA")
-if local_app_data and platform.system() == "Windows":
-    CONFIG_DIR = Path(local_app_data) / "CONFIRM"
-else:
-    CONFIG_DIR = Path.home() / ".confirm"
+CONFIG_DIR = Path.home() / ".confirm"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
 LOG_FILE = CONFIG_DIR / "confirm.log"
@@ -3282,57 +3277,7 @@ def check_dependencies():
     """Enhanced dependency checking with detailed reporting and user guidance"""
     logger.info("Checking system dependencies...")
     
-    # Check if running as frozen executable
-    is_frozen = getattr(sys, 'frozen', False)
-    
-    if is_frozen:
-        # When frozen, all dependencies should be bundled
-        # Just verify they can be imported
-        logger.info("Running as compiled executable - verifying bundled dependencies...")
-        
-        required_modules = {
-            'numpy': 'numpy',
-            'pandas': 'pandas',
-            'scipy': 'scipy',
-            'matplotlib': 'matplotlib',
-            'seaborn': 'seaborn',
-            'openpyxl': 'openpyxl',
-            'requests': 'requests'
-        }
-        
-        missing_deps = []
-        for package_name, module_name in required_modules.items():
-            try:
-                __import__(module_name)
-                logger.debug(f"{package_name}: OK (bundled)")
-            except ImportError as e:
-                missing_deps.append(package_name)
-                logger.error(f"Required package {package_name} cannot be imported: {e}")
-        
-        if missing_deps:
-            error_msg = "Missing Required Dependencies:\n\n"
-            error_msg += "Missing packages:\n"
-            for pkg in missing_deps:
-                error_msg += f"  • {pkg}\n"
-            error_msg += "\n"
-            error_msg += "These packages should be bundled in the executable.\n"
-            error_msg += "Please rebuild the executable with all dependencies included."
-            
-            try:
-                root = tk.Tk()
-                root.withdraw()
-                messagebox.showerror("Dependency Error", error_msg)
-                root.destroy()
-            except Exception as e:
-                logger.error(f"Failed to show dependency error dialog: {e}")
-                logger.error(error_msg)
-            
-            return False
-        
-        logger.info("All bundled dependencies verified")
-        return True
-    
-    # For non-frozen execution (development/testing), check versions
+    # Required dependencies with minimum versions
     dependencies = {
         'numpy': '1.24.0',
         'pandas': '2.0.0', 
@@ -3997,70 +3942,36 @@ class StatisticalAnalyzer:
     
     def show_message_safely(self, message_type, title, message):
         """Thread-safe message box display"""
-        try:
-            # Check if root window exists and is valid
-            if not hasattr(self, 'root') or not self.root or not self.root.winfo_exists():
-                logger.error(f"Cannot show message - root window not available: {title}: {message}")
-                return None
+        if threading.current_thread() is threading.main_thread():
+            if message_type == "error":
+                return messagebox.showerror(title, message)
+            elif message_type == "warning":
+                return messagebox.showwarning(title, message)
+            elif message_type == "info":
+                return messagebox.showinfo(title, message)
+            else:
+                return messagebox.showinfo(title, message)
+        else:
+            result_container = []
+            completed = threading.Event()
             
-            # Check if we're on main thread
-            if threading.current_thread() is threading.main_thread():
+            def show_on_main():
                 try:
                     if message_type == "error":
-                        return messagebox.showerror(title, message)
+                        result = messagebox.showerror(title, message)
                     elif message_type == "warning":
-                        return messagebox.showwarning(title, message)
+                        result = messagebox.showwarning(title, message)
                     elif message_type == "info":
-                        return messagebox.showinfo(title, message)
+                        result = messagebox.showinfo(title, message)
                     else:
-                        return messagebox.showinfo(title, message)
-                except RuntimeError as e:
-                    if "main thread is not in main loop" in str(e):
-                        logger.error(f"Tkinter mainloop not running: {title}: {message}")
-                        return None
-                    raise
-            else:
-                result_container = []
-                completed = threading.Event()
-                
-                def show_on_main():
-                    try:
-                        # Double-check root is still valid
-                        if not hasattr(self, 'root') or not self.root or not self.root.winfo_exists():
-                            logger.error(f"Cannot show message - root window not available: {title}: {message}")
-                            return
-                        
-                        if message_type == "error":
-                            result = messagebox.showerror(title, message)
-                        elif message_type == "warning":
-                            result = messagebox.showwarning(title, message)
-                        elif message_type == "info":
-                            result = messagebox.showinfo(title, message)
-                        else:
-                            result = messagebox.showinfo(title, message)
-                        result_container.append(result)
-                    except RuntimeError as e:
-                        if "main thread is not in main loop" in str(e):
-                            logger.error(f"Tkinter mainloop not running: {title}: {message}")
-                        else:
-                            logger.error(f"Error showing message box: {e}")
-                    except Exception as e:
-                        logger.error(f"Error showing message box: {e}")
-                    finally:
-                        completed.set()
-                
-                try:
-                    self.root.after(0, show_on_main)
-                    completed.wait(timeout=5.0)  # Prevent deadlock
-                    return result_container[0] if result_container else None
-                except RuntimeError as e:
-                    if "main thread is not in main loop" in str(e):
-                        logger.error(f"Cannot schedule message - mainloop not running: {title}: {message}")
-                        return None
-                    raise
-        except Exception as e:
-            logger.error(f"Failed to show message safely: {title}: {message} - Error: {e}")
-            return None
+                        result = messagebox.showinfo(title, message)
+                    result_container.append(result)
+                finally:
+                    completed.set()
+            
+            self.root.after(0, show_on_main)
+            completed.wait(timeout=5.0)  # Prevent deadlock
+            return result_container[0] if result_container else None
     
     def auto_resize_to_content(self):
         """Automatically resize window to fit content optimally"""
@@ -6405,32 +6316,15 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def handle_error(self, error_msg, exception=None, context="Operation"):
         """Unified error handling method"""
         full_msg = f"{context} failed: {error_msg}"
-        logger.error(f"{context} error: {error_msg}", exc_info=exception)
+        if exception:
+            # Log error details for debugging
+            pass
         
         def show_error():
-            try:
-                self.show_message_safely("error", "Error", full_msg)
-                self.update_progress_status(f"{context} failed", complete=True)
-            except Exception as e:
-                logger.error(f"Failed to display error message: {e}")
+            self.show_message_safely("error", "Error", full_msg)
+            self.update_progress_status(f"{context} failed", complete=True)
         
-        try:
-            # Check if root exists and mainloop might be running
-            if hasattr(self, 'root') and self.root and self.root.winfo_exists():
-                try:
-                    self.root.after(0, show_error)
-                except RuntimeError as e:
-                    if "main thread is not in main loop" in str(e):
-                        logger.error(f"Cannot display error - mainloop not running: {full_msg}")
-                        # Try to log to file instead
-                        logger.critical(f"CRITICAL ERROR (mainloop not running): {full_msg}")
-                    else:
-                        raise
-            else:
-                logger.error(f"Cannot display error - root window not available: {full_msg}")
-        except Exception as e:
-            logger.error(f"Error in handle_error: {e}")
-            logger.critical(f"CRITICAL ERROR: {full_msg}")
+        self.root.after(0, show_error)
         
     def cancel_operations(self):
         """Cancel current operations"""
@@ -6555,26 +6449,14 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         """Load Excel sheets in background thread"""
         if self.processing_state:
             return
-        
-        # CRITICAL: Get file path from tkinter variable on MAIN THREAD before starting worker
-        try:
-            file_path = self.file_path.get()
-        except RuntimeError:
-            self.show_message_safely("error", "Error", "Cannot access file path. Please try again.")
-            return
-        
-        # Validate file path exists before starting thread
-        if not file_path or not os.path.exists(file_path):
-            self.show_message_safely("error", "Error", "Please select a valid Excel file first.")
-            return
             
         self.set_processing_state(True)
         self.update_progress_status('Loading Excel file structure...', -1)
         self.update_window_title("Loading File")
         
-        def load_sheets_worker(file_path_param):
+        def load_sheets_worker():
             try:
-                file_path = file_path_param
+                file_path = self.file_path.get()
                 
                 # Validate file exists
                 if not os.path.exists(file_path):
@@ -6590,14 +6472,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 initial_memory_check = True  # Placeholder for memory monitoring
                 
                 # Read Excel file to get sheet names
-                # Wrap in try-except to catch any tkinter-related errors from openpyxl
-                try:
-                    excel_file = pd.ExcelFile(file_path)
-                    sheet_names = excel_file.sheet_names
-                except Exception as excel_error:
-                    # Log the actual Excel error
-                    logger.error(f"Excel file read error: {excel_error}", exc_info=excel_error)
-                    raise FileNotFoundError(f"Failed to read Excel file: {str(excel_error)}")
+                excel_file = pd.ExcelFile(file_path)
+                sheet_names = excel_file.sheet_names
                 
                 # SECURITY: Check for reasonable file size (basic validation)
                 if len(sheet_names) > 100:  # Sanity check
@@ -6611,51 +6487,21 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 
                 # Update UI from main thread
                 def update_ui():
-                    try:
-                        with self.data_lock:
-                            self.excel_file = excel_file
-                            if hasattr(self, 'sheet_combo') and self.sheet_combo:
-                                self.sheet_combo['values'] = sheet_names
-                                
-                                if sheet_names:
-                                    self.sheet_combo.set(sheet_names[0])
+                    with self.data_lock:
+                        self.excel_file = excel_file
+                        self.sheet_combo['values'] = sheet_names
                         
-                        self.update_progress_status(f'Loaded {len(sheet_names)} sheets. Select a sheet to analyze.', 100, True)
-                    except Exception as ui_error:
-                        logger.error(f"Error updating UI after Excel load: {ui_error}")
+                        if sheet_names:
+                            self.sheet_combo.set(sheet_names[0])
+                    
+                    self.update_progress_status(f'Loaded {len(sheet_names)} sheets. Select a sheet to analyze.', 100, True)
                 
-                # Safely schedule UI update
-                try:
-                    if hasattr(self, 'root') and self.root and self.root.winfo_exists():
-                        self.root.after(0, update_ui)
-                    else:
-                        logger.error("Cannot update UI - root window not available")
-                except RuntimeError as e:
-                    if "main thread is not in main loop" in str(e):
-                        logger.error("Cannot schedule UI update - mainloop not running")
-                    else:
-                        raise
+                self.root.after(0, update_ui)
                 
             except Exception as e:
-                logger.error(f"Excel file loading error: {e}", exc_info=e)
-                # Use handle_error which now has proper mainloop checking
                 self.handle_error(str(e), e, "Excel file loading")
-                # Also reset processing state
-                def reset_state():
-                    try:
-                        self.set_processing_state(False)
-                        self.update_progress_status("File loading failed", complete=True)
-                    except:
-                        pass
-                
-                try:
-                    if hasattr(self, 'root') and self.root and self.root.winfo_exists():
-                        self.root.after(0, reset_state)
-                except:
-                    pass
         
-        # Pass file_path as parameter to avoid accessing tkinter from worker thread
-        self.submit_task(load_sheets_worker, file_path)
+        self.submit_task(load_sheets_worker)
 
     # =============== NEW: BATCH PROCESSING METHODS ===============
     
@@ -6958,18 +6804,11 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def _load_sheet_preview(self, sheet_name):
         """Load preview data for a single sheet with memory management"""
         try:
-            # Use the already-loaded excel_file if available (thread-safe)
-            # Otherwise, we shouldn't be in a thread - use excel_file attribute
-            if self.excel_file:
-                df_preview = pd.read_excel(self.excel_file, sheet_name=sheet_name, nrows=5)
-                return df_preview
-            else:
-                # If excel_file not loaded, we can't safely access file_path from thread
-                # This should not happen if load_excel_sheets_threaded was called first
-                logger.warning(f"Cannot load preview - excel_file not loaded for sheet: {sheet_name}")
-                return None
+            # Use a context manager to ensure proper cleanup
+            with pd.ExcelFile(self.file_path.get()) as excel_file:
+                df_preview = pd.read_excel(excel_file, sheet_name=sheet_name, nrows=5)
+            return df_preview
         except Exception as e:
-            logger.error(f"Error loading sheet preview for {sheet_name}: {e}")
             return None
 
     def _validate_sheet_data(self, df_preview, sheet_name):
@@ -7527,14 +7366,11 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         try:
             # Read the sheet data if not provided
             if df is None:
-                # Always use the loaded Excel file (thread-safe)
-                # self.file_path.get() cannot be called from worker threads
+                # Use the loaded Excel file if available, otherwise read from file path
                 if self.excel_file:
                     df = pd.read_excel(self.excel_file, sheet_name=sheet_name)
                 else:
-                    # If excel_file not loaded, we can't safely access file_path from thread
-                    logger.error(f"Cannot process sheet {sheet_name} - excel_file not loaded")
-                    return None
+                    df = pd.read_excel(self.file_path.get(), sheet_name=sheet_name)
             
             # Check if sheet is empty before validation
             if df.empty:

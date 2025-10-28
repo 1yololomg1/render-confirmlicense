@@ -23,43 +23,42 @@ echo [INFO] PyInstaller found - proceeding with build
 echo.
 
 REM Navigate to source directory
-cd /d "%~dp0\..\01_SOURCE_CODE"
+cd /d "%~dp001_SOURCE_CODE"
 
 echo [BUILD] Building CONFIRM.exe with updated files...
 echo [INFO] This includes all recent copyright and documentation updates
 echo.
 
-REM Build the executable with optimized settings
-pyinstaller --onefile ^
-    --windowed ^
-    --name="CONFIRM" ^
-    --icon=icon.ico ^
-    --add-data="protection_module.py;." ^
-    --hidden-import="tkinter" ^
-    --hidden-import="pandas" ^
-    --hidden-import="numpy" ^
-    --hidden-import="matplotlib" ^
-    --hidden-import="seaborn" ^
-    --hidden-import="scipy" ^
-    --hidden-import="requests" ^
-    --hidden-import="cryptography" ^
-    --hidden-import="psutil" ^
+REM Clean any previous build artifacts first
+if exist build rmdir /s /q build
+if exist dist rmdir /s /q dist
+if exist __pycache__ rmdir /s /q __pycache__
+
+REM Build the executable using the spec file (contains all fixes)
+pyinstaller --clean --noconfirm ^
     --distpath="../CONFIRM_Distribution_Optimized" ^
-    CONFIRM_Integrated.py
+    CONFIRM.spec
 
 if %errorLevel% == 0 (
+    REM Clean up build artifacts (keep only the final exe)
+    if exist build rmdir /s /q build
+    if exist dist rmdir /s /q dist
+    
     echo.
     echo ===============================================
     echo    BUILD SUCCESSFUL!
     echo ===============================================
     echo.
     echo [SUCCESS] New CONFIRM.exe created with all updates:
-    echo           - Updated copyright headers
-    echo           - Corrected documentation references
-    echo           - Fixed license tier information
-    echo           - Updated contact information
+    echo           - Fixed dependency checking for frozen exe
+    echo           - Fixed threading/mainloop issues
+    echo           - All required packages bundled
+    echo           - Console enabled for debugging
     echo.
     echo [LOCATION] CONFIRM_Distribution_Optimized\CONFIRM.exe
+    echo.
+    echo [NOTE] Build artifacts cleaned up
+    echo [NOTE] Only final exe remains in CONFIRM_Distribution_Optimized\
     echo.
     echo [NEXT] The optimized distribution is ready for deployment!
 ) else (

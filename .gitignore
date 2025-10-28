@@ -157,3 +157,5 @@ dmypy.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+*.exe
+*.zip
