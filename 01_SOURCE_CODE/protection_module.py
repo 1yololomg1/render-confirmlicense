@@ -27,7 +27,6 @@ import hashlib
 import psutil
 import threading
 from ctypes import wintypes
-import subprocess
 import platform
 
 class CommercialProtection:
@@ -123,6 +122,14 @@ class CommercialProtection:
         if "_MEI" in path:
             return True
         if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
+            return True
+        
+        # For Nuitka compiled executables, check for Nuitka-specific paths
+        # Nuitka creates executables directly, not in temp directories
+        # But we should allow execution from any valid location when frozen
+        if getattr(sys, 'frozen', False):
+            # When frozen (either PyInstaller or Nuitka), allow execution
+            # Nuitka doesn't use temp directories like PyInstaller
             return True
             
         return False

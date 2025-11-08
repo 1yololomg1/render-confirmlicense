@@ -1,5 +1,5 @@
 ---
-description: Documents license lifecycle management including creation, validation, revocation and hardware-binding processes
+description: Comprehensive license management system for statistical software with hardware binding and tiered access control
 ---
 
 # === USER INSTRUCTIONS ===
@@ -145,56 +145,121 @@ Binding Implementation:
 - Used for transfer/migration decisions
 >>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
-# === END USER INSTRUCTIONS ===
-# === END USER INSTRUCTIONS ===
+
+---
+description: Documents license lifecycle management including creation, validation, revocation and hardware-binding processes
+---
 
 # license-workflow
-
 ## License Lifecycle States and Transitions
-
 ### Creation and Activation
 - Hardware-bound licensing using CPU ID, motherboard serial, and MAC address fingerprinting
 - Tier-based license generation (Student/Startup/Professional/Enterprise)
-
 ### Validation
 - Multi-tier validation system with hardware fingerprinting checks
 - 72-hour offline grace period for temporary disconnected usage
 - Runtime integrity verification with anti-debugging protection
 - VM/sandbox environment detection
-
 ### Revocation
 - Automated license revocation with complete audit trail generation
 - Enterprise-specific revocation policies and rules
 - Revocation triggers based on license agreement violations
-
 ### Migration
 - Legacy license migration system with upgrade paths
 - Custom migration rules per license tier
 - Hardware binding transfer during migration
-
 ## Core Components
-
 ### Protection Module (01_SOURCE_CODE/protection_module.py)
 - Commercial software protection implementation
 - Hardware fingerprint generation and validation
 - Runtime integrity monitoring
 - Anti-tampering detection
-
 ### License Manager (server.mjs)
 - License tier enforcement
 - Hardware binding validation
 - Grace period management
 - Revocation workflow handling
 - Migration path processing
-
 ## Business Rules
-
 - Tier-specific feature access restrictions
 - Enterprise license custom validation requirements
 - Migration eligibility criteria
 - Revocation trigger conditions
 - Grace period duration rules
 - Hardware binding requirements per tier
+$END$
+# === END USER INSTRUCTIONS ===
+# === END USER INSTRUCTIONS ===
+
+# license-workflow
+
+## License States and Transitions
+Importance Score: 85/100
+
+States:
+1. Unactivated (Initial)
+2. Active
+3. Grace Period (72h offline allowance)
+4. Revoked
+5. Migrated (from legacy format)
+
+## License Creation Flow
+
+### Hardware Binding Process
+- Generates unique identifier using:
+  - CPU ID
+  - Motherboard serial
+  - BIOS information
+- Encrypts credentials with hardware-specific keys
+- Validates against VM/sandbox environments
+
+### Tier Assignment
+- Student: Annual validity
+- Startup: Monthly validity
+- Professional: Monthly/Annual options
+- Enterprise: Custom terms
+- OEM/White-label: Special provisions
+
+## Validation Workflow
+Importance Score: 80/100
+
+1. Hardware Fingerprint Verification
+2. Tier-specific Feature Access Control
+3. Runtime Integrity Checks
+4. Anti-tampering Validation
+5. Sandbox Detection
+
+## License Migration System
+Importance Score: 75/100
+
+- Legacy format detection
+- Key transformation rules
+- Hardware rebinding process
+- Tier mapping for legacy licenses
+- Historical usage preservation
+
+## Revocation Process
+- Hardware binding invalidation
+- Grace period management
+- Tier access termination
+- Feature deactivation sequence
+- Migration state preservation
+
+## Integration Points
+File: `01_SOURCE_CODE/protection_module.py`
+- Runtime integrity monitoring
+- Anti-debugging enforcement
+- Memory protection checks
+
+File: `01_SOURCE_CODE/license_manager_gui.py`
+- License administration interface
+- Tier management controls
+- Hardware binding tools
+
+File: `server.mjs`
+- Remote validation endpoints
+- Migration service handlers
+- Tier access controllers
 
 $END$
 

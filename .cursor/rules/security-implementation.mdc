@@ -1,5 +1,5 @@
 ---
-description: Specification for analyzing security, anti-tampering, and license protection implementations in software systems
+description: Security implementation specification for anti-tampering, VM detection, and cryptographic validation in statistical software protection
 ---
 
 # === USER INSTRUCTIONS ===
@@ -173,25 +173,23 @@ Core Security Features:
 - Migration path security for legacy systems
 >>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
-# === END USER INSTRUCTIONS ===
 
+---
+description: Specification for analyzing security, anti-tampering, and license protection implementations in software systems
+---
 # security-implementation
-
 ## Core Protection System
 The security implementation consists of three main protection layers:
-
 ### Hardware-Based License Binding
 - Multiple hardware identifier collection (CPU ID, motherboard serial, MAC address)
 - Combined fingerprinting for unique machine identification
 - Hardware signature validation for license activation
 - Offline grace period system with 72-hour allowance
-
 ### Anti-Tampering Mechanisms
 - Runtime memory integrity verification
 - Detection of debugging attempts
 - VM/sandbox environment detection
 - Memory patching prevention system
-
 ### License Validation Architecture
 Located in server.mjs:
 - Multi-tier validation system with enterprise-specific rules
@@ -199,23 +197,71 @@ Located in server.mjs:
 - Automated revocation system with audit logging
 - Legacy license migration handling
 - Grace period management for offline usage
-
 ## Business Rules Implementation
-
 ### License Tier Controls
 - Student/Startup/Professional/Enterprise tier restrictions
 - Feature access control based on license level
 - Custom validation rules for enterprise licenses
 - Automated license revocation policies
-
 ### Protection Module Components
 Located in 01_SOURCE_CODE/protection_module.py:
 - Commercial protection system implementation
 - Custom integrity verification routines
 - Advanced anti-debugging measures
 - Hardware binding enforcement
-
 Security Implementation Importance Score: 85/100
+$END$
+# === END USER INSTRUCTIONS ===
+
+# security-implementation
+Importance Score: 90/100
+
+## Core Protection Layers
+
+### Anti-Tampering System
+Path: `01_SOURCE_CODE/protection_module.py`
+- Hardware fingerprinting implementation using:
+  - CPU ID extraction
+  - Motherboard serial number validation
+  - BIOS data verification
+- Runtime integrity monitoring with continuous validation checks
+- Memory patching detection for preventing runtime modifications
+
+### Virtualization Protection
+Path: `01_SOURCE_CODE/protection_module.py`
+- VM/sandbox detection mechanisms
+- Hardware environment validation
+- Anti-debugging measures implementation
+- API hooking prevention system
+
+### Cryptographic Security
+Path: `01_SOURCE_CODE/license_manager_gui.py`
+- Hardware-bound encryption for credential storage
+- Secure validation workflows for license verification
+- Custom encryption tied to hardware identifiers
+
+## License Security Implementation
+
+### Hardware Binding
+Path: `server.mjs`
+- Multiple system identifier collection
+- Hardware-specific license generation
+- Binding validation on activation
+- Migration system for legacy key formats with security preservation
+
+### Runtime Protection
+- Continuous integrity monitoring during execution
+- Anti-debugging implementations
+- Protected memory regions for license data
+- Sandbox escape detection
+
+### Tier-Based Security
+- Unique validation rules per license tier:
+  - Student: Annual validation checks
+  - Startup: Monthly verification
+  - Professional: Dual-mode verification
+  - Enterprise: Custom security protocols
+- OEM security customization options
 
 $END$
 

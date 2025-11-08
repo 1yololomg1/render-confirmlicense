@@ -58,10 +58,17 @@ import weakref
 import gc
 
 # Import commercial protection module
+PROTECTION_AVAILABLE = False
+PROTECTION_ERROR = None
 try:
     from protection_module import initialize_protection, cleanup_protection
     PROTECTION_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    PROTECTION_ERROR = str(e)
+    PROTECTION_AVAILABLE = False
+    # Log error will be done after logger is initialized
+except Exception as e:
+    PROTECTION_ERROR = f"Unexpected error importing protection_module: {str(e)}"
     PROTECTION_AVAILABLE = False
 
 try:
@@ -131,6 +138,16 @@ def setup_logging():
 
 # Initialize logger
 logger = setup_logging()
+
+# Log protection module import status
+if PROTECTION_AVAILABLE:
+    logger.info("Protection module imported successfully")
+else:
+    if PROTECTION_ERROR:
+        logger.warning(f"Protection module import failed: {PROTECTION_ERROR}")
+        logger.warning("Commercial protection features will not be available")
+    else:
+        logger.warning("Protection module not available - commercial protection disabled")
 
 
 class SecurityError(Exception):
@@ -586,7 +603,7 @@ def get_saved_license():
             license_key = license_payload.get('license_key')
             if license_key:
                 logger.info("Loaded encrypted license payload")
-                return license_key.strip()
+                return license_payload  # Return full dict, not just key
 
             logger.warning("Encrypted license payload missing license key")
             return None
@@ -597,7 +614,13 @@ def get_saved_license():
             logger.warning("Legacy plaintext license file detected; upgrading to encrypted format.")
             additional = {k: v for k, v in data.items() if k != 'license_key'}
             if save_license(legacy_key, additional):
-                return legacy_key.strip()
+                # Return as dict format
+                return {
+                    'license_key': legacy_key.strip(),
+                    'saved_at': data.get('saved_at'),
+                    'computer_id': data.get('computer_id'),
+                    'metadata': additional
+                }
             logger.error("Failed to upgrade legacy license file to encrypted format")
             return None
 
@@ -656,14 +679,25 @@ def validate_license_activation():
     logger.info("Starting license validation workflow...")
     
     # First check for saved license
-    saved_license = get_saved_license()
+    saved_license_data = get_saved_license()
     
-    if saved_license:
+    if saved_license_data:
         logger.info("Found saved license, validating...")
-        validation_result = check_license_with_fingerprint(saved_license)
+        saved_license_key = saved_license_data.get('license_key', '').strip()
+        validation_result = check_license_with_fingerprint(saved_license_key)
         
         if validation_result["valid"]:
             logger.info("Saved license is valid - computer already activated")
+            # Update validated_at timestamp to prevent re-prompting
+            try:
+                save_license(saved_license_key, {
+                    'tier': validation_result.get('tier'),
+                    'expires': validation_result.get('expires'),
+                    'validated_at': datetime.now().isoformat()
+                })
+                logger.debug("Updated license validation timestamp")
+            except Exception as e:
+                logger.warning(f"Failed to update license timestamp (non-critical): {e}")
             return validation_result
         else:
             logger.warning(f"Saved license invalid: {validation_result.get('reason', 'Unknown error')}")
@@ -6532,6 +6566,56 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             pass
         except Exception as e:
             raise ValueError(f"Excel file validation failed: {str(e)}")
+    
+    def validate_contingency_format(self, filename):
+        """Validate that the file contains properly formatted contingency tables"""
+        try:
+            # Read first sheet to check format
+            excel_file = pd.ExcelFile(filename)
+            if not excel_file.sheet_names:
+                raise ValueError("Excel file contains no sheets")
+            
+            # Check first sheet
+            first_sheet = excel_file.sheet_names[0]
+            df = pd.read_excel(filename, sheet_name=first_sheet, header=None)
+            
+            # Check if we have enough data
+            if df.shape[0] < 2:
+                raise ValueError(
+                    "Invalid format: Contingency table must have at least 2 rows of data.\n\n"
+                    "Expected format:\n"
+                    "Row 1: [empty cells]\n"
+                    "Row 2+: Numeric data only"
+                )
+            
+            # Check if first column (after header row) contains text labels
+            # Start checking from row 1 (index 1) since row 0 may be empty
+            if df.shape[0] > 1:
+                first_data_row = df.iloc[1]
+                
+                # Check if first column is text (not numeric)
+                if first_data_row.iloc[0] is not None and not isinstance(first_data_row.iloc[0], (int, float)):
+                    raise ValueError(
+                        "Invalid format: First column contains text labels.\n\n"
+                        "CONFIRM expects contingency tables in this format:\n"
+                        "  Row 1: [empty cells]\n"
+                        "  Row 2: 1  [data]  [data]  [data]\n"
+                        "  Row 3: 2  [data]  [data]  [data]\n"
+                        "  Row 4: 3  [data]  [data]  [data]\n"
+                        "  Last:  Category names (optional)\n\n"
+                        "Your file has text labels like row names in the first column.\n"
+                        "Please use numeric IDs (1, 2, 3...) instead.\n\n"
+                        "Need help? Contact support@traceseis.com"
+                    )
+            
+            return True
+            
+        except ValueError:
+            # Re-raise our formatted errors
+            raise
+        except Exception as e:
+            # Generic error for other issues
+            raise ValueError(f"Unable to read contingency table format: {str(e)}")
         
     def browse_file(self):
         """Browse and select Excel file with enhanced security"""
@@ -6545,6 +6629,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         if filename:
             try:
                 self.validate_file_security(filename)
+                self.validate_contingency_format(filename)
                 self.file_path.set(filename)
                 self.load_excel_sheets_threaded()
                 
@@ -6603,6 +6688,10 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 if len(sheet_names) > 100:  # Sanity check
                     raise ValueError("Excel file has too many sheets (possible corruption)")
                 
+                # FIX: Set excel_file IMMEDIATELY so buttons work right away
+                with self.data_lock:
+                    self.excel_file = excel_file
+                
                 self.update_progress_status('Processing sheet information...', 75)
                 
                 # Check for cancellation
@@ -6612,13 +6701,13 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 # Update UI from main thread
                 def update_ui():
                     try:
-                        with self.data_lock:
-                            self.excel_file = excel_file
-                            if hasattr(self, 'sheet_combo') and self.sheet_combo:
-                                self.sheet_combo['values'] = sheet_names
-                                
-                                if sheet_names:
-                                    self.sheet_combo.set(sheet_names[0])
+                        if hasattr(self, 'sheet_combo') and self.sheet_combo:
+                            self.sheet_combo['values'] = sheet_names
+                            
+                            if sheet_names:
+                                self.sheet_combo.set(sheet_names[0])
+                                # FIX: Also set the variable explicitly
+                                self.sheet_var.set(sheet_names[0])
                         
                         self.update_progress_status(f'Loaded {len(sheet_names)} sheets. Select a sheet to analyze.', 100, True)
                     except Exception as ui_error:
@@ -9305,11 +9394,14 @@ def check_terms_acceptance():
     """Check if terms have been previously accepted"""
     try:
         if SETTINGS_FILE.exists():
-            with open(SETTINGS_FILE, 'r') as f:
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
-                return settings.get('terms_accepted', False)
-    except:
-        pass
+                terms_accepted = settings.get('terms_accepted', False)
+                if terms_accepted:
+                    logger.debug(f"Terms were previously accepted on {settings.get('terms_accepted_date', 'unknown date')}")
+                return terms_accepted
+    except Exception as e:
+        logger.warning(f"Error checking terms acceptance: {e}")
     return False
 
 def show_terms_acceptance_dialog():
@@ -9431,17 +9523,27 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
     def accept_terms():
         nonlocal terms_accepted
         terms_accepted = True
-        if remember_choice.get():
-            try:
-                SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-                settings = {
-                    'terms_accepted': True,
-                    'terms_accepted_date': datetime.now().isoformat()
-                }
-                with open(SETTINGS_FILE, 'w') as f:
-                    json.dump(settings, f, indent=2)
-            except Exception as e:
-                pass
+        # Always save terms acceptance (not just when checkbox is checked)
+        # The checkbox is for "don't show again" preference, but acceptance should always be saved
+        try:
+            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            # Read existing settings first
+            settings = {}
+            if SETTINGS_FILE.exists():
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+            # Update with terms acceptance (always save, regardless of checkbox)
+            settings['terms_accepted'] = True
+            settings['terms_accepted_date'] = datetime.now().isoformat()
+            # Also save the "don't show again" preference if checkbox is checked
+            if remember_choice.get():
+                settings['terms_dont_show_again'] = True
+            # Save back
+            with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2)
+            logger.info("Terms acceptance saved successfully")
+        except Exception as e:
+            logger.error(f"Failed to save terms acceptance: {e}")
         terms_dialog.destroy()
         root.destroy()
     
@@ -9627,16 +9729,30 @@ def setup_application_environment():
 def main():
     """Enhanced main application entry point with comprehensive initialization"""
     try:
-        # Initialize commercial protection (only for compiled .exe, not Python scripts)
+        # Initialize commercial protection
         is_compiled = getattr(sys, 'frozen', False)
-        if PROTECTION_AVAILABLE and is_compiled:
+        
+        if not PROTECTION_AVAILABLE:
+            if PROTECTION_ERROR:
+                logger.warning(f"Protection module unavailable: {PROTECTION_ERROR}")
+                logger.warning("Application will run without commercial protection features")
+            else:
+                logger.warning("Protection module not available - running without protection")
+        elif PROTECTION_AVAILABLE:
+            # Try to initialize protection regardless of compilation status
+            # (can be useful for testing protection during development)
             try:
                 protection = initialize_protection()
-                logger.info("Commercial protection initialized")
+                if is_compiled:
+                    logger.info("Commercial protection initialized (compiled .exe mode)")
+                else:
+                    logger.info("Commercial protection initialized (development/testing mode)")
             except Exception as e:
-                logger.warning(f"Protection initialization failed: {e}")
-        elif PROTECTION_AVAILABLE and not is_compiled:
-            logger.info("Running from Python script - skipping commercial protection (only active in compiled .exe)")
+                logger.error(f"Protection initialization failed: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                import traceback
+                logger.debug(f"Protection initialization traceback: {traceback.format_exc()}")
+                logger.warning("Application will continue without protection - this may indicate a configuration issue")
         
         # Run complete initialization
         if not initialize_application():
