@@ -10,15 +10,54 @@ This will create a new CONFIRM.exe that includes all recent updates:
 - Corrected documentation references
 - Fixed license tier information  
 - Updated contact information (info@traceseis.com)
+- Nuitka compatibility fixes
 
 REQUIREMENTS:
 =============
 - Python 3.8+ installed
-- PyInstaller installed (pip install pyinstaller)
 - All dependencies installed (pandas, numpy, matplotlib, etc.)
+- Choose ONE of the following:
+  * Nuitka (RECOMMENDED): pip install nuitka
+  * PyInstaller (Legacy): pip install pyinstaller
 
-BUILD OPTIONS:
-==============
+BUILD OPTIONS - NUITKA (RECOMMENDED):
+=====================================
+
+Nuitka provides better performance and smaller executables.
+
+OPTION 1: Windows Batch Script
+- Navigate to: 01_SOURCE_CODE folder
+- Run: build_nuitka.bat
+- Double-click the file or run from command prompt
+
+OPTION 2: Linux/Mac Shell Script
+- Navigate to: 01_SOURCE_CODE folder
+- Run: bash build_nuitka.sh
+- Or: chmod +x build_nuitka.sh && ./build_nuitka.sh
+
+OPTION 3: Manual Nuitka Command
+- Navigate to: 01_SOURCE_CODE folder
+- Run the command from build_nuitka.bat or build_nuitka.sh
+- Or use the CONFIRM.nuitka configuration file
+
+NUITKA BUILD PROCESS:
+======================
+1. Script checks for Nuitka installation
+2. Cleans previous build artifacts
+3. Builds standalone executable with all modules
+4. Outputs CONFIRM.exe to dist folder
+5. Optionally copies to CONFIRM_Distribution_Optimized folder
+
+NUITKA ADVANTAGES:
+==================
+- Faster startup time
+- Smaller executable size
+- Better performance
+- Native code compilation
+- Better protection module compatibility
+
+BUILD OPTIONS - PYINSTALLER (LEGACY):
+=====================================
 
 OPTION 1: Batch Script (Windows)
 - Run: build_new_exe.bat
@@ -28,25 +67,55 @@ OPTION 2: Python Script (Cross-platform)
 - Run: python build_new_exe.py
 - Works on Windows, Mac, Linux
 
-BUILD PROCESS:
-==============
+PYINSTALLER BUILD PROCESS:
+==========================
 1. Script checks for PyInstaller
 2. Builds executable with all updates
 3. Outputs to CONFIRM_Distribution_Optimized folder
 4. Replaces old EXE with new version
 
+TROUBLESHOOTING NUITKA BUILD:
+=============================
+
+If build fails, check:
+
+1. Missing Dependencies:
+   - Ensure all Python packages are installed: pip install -r requirements.txt
+   - Check for missing system libraries (Windows SDK, Visual C++)
+
+2. Module Import Errors:
+   - Nuitka may need explicit --include-module flags
+   - Check build_nuitka.bat for all included modules
+   - Add missing modules to the build script
+
+3. Protection Module Issues:
+   - Protection module now works with both PyInstaller and Nuitka
+   - If issues persist, check protection_module.py for path validation
+
+4. Large Executable Size:
+   - Normal for standalone builds (includes Python runtime)
+   - Use --onefile for single executable
+   - Consider --standalone for folder distribution
+
+5. Runtime Errors:
+   - Test the executable before distribution
+   - Check logs in ~/.confirm/confirm.log
+   - Verify all data files are included if needed
+
 WHAT'S INCLUDED IN NEW EXE:
 ===========================
 - All source code with updated copyright headers
-- Protection module with copyright headers
+- Protection module with Nuitka compatibility fixes
 - License manager with updated contact info
 - All statistical analysis functionality
 - Hardware binding and validation
 - Updated license tier handling
+- All required Python dependencies
 
 AFTER BUILDING:
 ===============
-- New CONFIRM.exe will be in CONFIRM_Distribution_Optimized folder
+- New CONFIRM.exe will be in dist folder (Nuitka) or CONFIRM_Distribution_Optimized folder (PyInstaller)
+- Test the executable before distribution
 - Ready for client deployment
 - Includes all recent changes and fixes
 

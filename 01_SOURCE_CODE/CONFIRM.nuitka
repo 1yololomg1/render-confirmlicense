@@ -1,0 +1,68 @@
+# Nuitka Build Configuration for CONFIRM.exe
+# Copyright (c) 2024 TraceSeis, Inc. All rights reserved.
+
+# Main script
+--main=CONFIRM_Integrated.py
+
+# Output options
+--output-dir=dist
+--output-filename=CONFIRM.exe
+--windows-icon-from-ico=  # Add icon path if available
+
+# Include modules explicitly (Nuitka needs these)
+--include-module=protection_module
+--include-module=requests
+--include-module=pandas
+--include-module=numpy
+--include-module=scipy
+--include-module=matplotlib
+--include-module=seaborn
+--include-module=openpyxl
+--include-module=cryptography
+--include-module=psutil
+--include-module=tkinter
+--include-module=tkinter.ttk
+--include-module=tkinter.messagebox
+--include-module=tkinter.simpledialog
+--include-module=tkinter.filedialog
+--include-module=matplotlib.backends.backend_tkagg
+--include-module=scipy.stats
+--include-module=scipy.ndimage
+--include-module=importlib.metadata
+--include-module=importlib_metadata
+
+# Data files (if needed)
+# --include-data-dir=path/to/data=target/path
+
+# Windows-specific options
+--windows-console-mode=disable  # GUI application
+--windows-uac-admin=no  # Don't require admin privileges
+
+# Standalone mode (creates single executable)
+--standalone
+
+# Onefile mode (creates single .exe file)
+--onefile
+
+# Optimization
+--assume-yes-for-downloads
+--show-progress
+--show-memory
+
+# Remove unnecessary files
+--remove-output
+
+# Enable anti-bloat (remove unused modules)
+--no-prefer-source-code
+
+# Python version compatibility
+--python-version=3.8
+
+# Company and product info (Windows version info)
+--windows-company-name=TraceSeis, Inc.
+--windows-product-name=CONFIRM Statistical Validation Engine
+--windows-file-version=1.0.0.0
+--windows-product-version=1.0.0.0
+--windows-file-description=CONFIRM Statistical Analysis Suite
+--copyright=Copyright (C) 2024 TraceSeis, Inc. All rights reserved.
+

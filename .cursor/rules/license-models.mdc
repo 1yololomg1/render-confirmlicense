@@ -1,5 +1,5 @@
 ---
-description: Defines license data models, types, and hardware binding mechanisms for software protection and validation
+description: Handles license data models, types, and hardware binding relationships for statistical software protection
 ---
 
 # === USER INSTRUCTIONS ===
@@ -134,49 +134,105 @@ Implementation Locations:
 - 01_SOURCE_CODE/protection_module.py: Hardware binding protection
 >>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
-# === END USER INSTRUCTIONS ===
-# === END USER INSTRUCTIONS ===
+
+---
+description: Defines license data models, types, and hardware binding mechanisms for software protection and validation
+---
 
 # license-models
-
 ## Core License Types (IMPORTANCE: 85)
 - Student: Limited feature access
 - Startup: Standard feature set with usage limits  
 - Professional: Full feature access for individual use
 - Enterprise: Multi-user deployment with custom validation rules
-
 ## Hardware Binding Model (IMPORTANCE: 90)
 Hardware-based fingerprinting using:
 - CPU identifier
 - Motherboard serial number  
 - MAC address
 - Multiple identifier validation for enhanced security
-
 ## License Validation Rules
 1. Primary Validation (01_SOURCE_CODE/protection_module.py)
 - Multi-tier verification with hardware fingerprinting
 - Runtime integrity checks
 - Anti-debugging protection
 - VM/sandbox detection
-
 2. Server-side Management (server.mjs)
 - License migration handling
 - Grace period management (72 hours offline)
 - Automated revocation system
 - Audit trail tracking
-
 ## License State Management
 - Active/Inactive status tracking
 - Expiration handling with grace periods
 - Hardware binding verification
 - Enterprise deployment monitoring
 - Migration state tracking for legacy licenses
-
 ## Enterprise-Specific Extensions
 - Custom validation rulesets
 - Multi-seat license management
 - Department-level access control
 - License pool allocation tracking
+$END$
+# === END USER INSTRUCTIONS ===
+# === END USER INSTRUCTIONS ===
+
+# license-models
+
+Importance Score: 85/100
+
+## License Tier Structure
+
+The system implements a hierarchical license model with four distinct tiers:
+
+1. Student
+- Annual licensing period
+- Basic feature access
+- Hardware binding required
+
+2. Startup
+- Monthly licensing structure
+- Intermediate feature set
+- Hardware fingerprinting enforcement
+
+3. Professional
+- Monthly or annual options
+- Full feature access
+- Strict hardware binding
+- Runtime integrity monitoring
+
+4. Enterprise
+- Custom licensing terms
+- Complete feature set
+- Support package inclusion
+- OEM/White-label options
+
+## Hardware Binding Model
+
+License validation requires multiple hardware identifiers:
+- CPU ID
+- Motherboard serial number
+- BIOS information
+- System fingerprinting
+
+These components are integrated into a composite hardware signature used for:
+- License activation
+- Runtime validation
+- Migration verification
+
+## Validation Rules
+
+License enforcement implements:
+1. 72-hour offline grace period
+2. Anti-VM detection
+3. Hardware signature verification
+4. Tier-specific feature gates
+5. Legacy license format migration
+
+Files:
+- `01_SOURCE_CODE/license_manager_gui.py`: Primary license model implementation
+- `01_SOURCE_CODE/protection_module.py`: Hardware binding logic
+- `server.mjs`: License validation and tier management
 
 $END$
 

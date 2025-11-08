@@ -1,5 +1,5 @@
 ---
-description: Documents core protection algorithms and security mechanisms for software licensing and anti-tampering systems
+description: Protection algorithms for commercial software licensing and anti-tampering mechanisms
 ---
 
 # === USER INSTRUCTIONS ===
@@ -121,43 +121,82 @@ License Validation Security:
 - Revocation mechanism support
 >>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
-# === END USER INSTRUCTIONS ===
-# === END USER INSTRUCTIONS ===
+
+---
+description: Documents core protection algorithms and security mechanisms for software licensing and anti-tampering systems
+---
 
 # protection-algorithms
-
 Protection systems implement multi-layered security through hardware fingerprinting, anti-debugging, and runtime integrity verification.
-
 ## Hardware Fingerprinting
 Located in `01_SOURCE_CODE/protection_module.py`:
 - System identifier generation using CPU ID, motherboard serial number, and MAC address combinations
 - License binding to unique hardware signatures
 - Multi-factor hardware validation to prevent license sharing
-
 ## Anti-Debugging Protection
 - Active runtime detection of debuggers and analysis tools
 - VM/sandbox environment detection mechanisms
 - Prevention of unauthorized code analysis
 - Memory patching detection for tamper prevention
-
 ## Runtime Integrity
 - Continuous verification of application integrity during execution
 - Custom validation systems for detecting modifications
 - Automated license revocation on tampering detection
 - Audit trail generation for security violations
-
 ## License Security
 - 72-hour offline grace period implementation
 - Hardware-bound tier restrictions (Student/Startup/Professional/Enterprise)
 - Multi-tier validation system with fingerprint verification
 - Legacy license migration protocols with security preservation
-
 ## Protection Score: 85/100
 Core security mechanisms represent critical business value through:
 - Unique hardware fingerprinting algorithms
 - Custom anti-tampering systems
 - Multi-factor license protection
 - Enterprise-grade security protocols
+$END$
+# === END USER INSTRUCTIONS ===
+# === END USER INSTRUCTIONS ===
+
+# protection-algorithms
+
+Importance Score: 90/100
+
+## Hardware Fingerprinting System
+- CPU ID collection and validation
+- Motherboard serial number extraction
+- BIOS data fingerprinting
+- Composite hardware identifier generation
+- System-specific binding for license enforcement
+
+## Anti-Tampering Protection
+Located in: `01_SOURCE_CODE/protection_module.py`
+- Runtime integrity monitoring for statistical software
+- Memory patching detection mechanisms
+- API hooking prevention systems
+- Process debugging detection
+- VM/sandbox environment detection
+
+## Runtime Verification
+- Continuous integrity checks during software execution
+- Hardware binding validation at runtime
+- License tier verification against system fingerprint
+- Anti-debugging measure enforcement
+- Sandbox escape detection
+
+## Security Implementation Details
+- Hardware-bound encryption for credential storage
+- Anti-VM measures for license protection
+- Multiple system identifier validation
+- Runtime protection against memory modifications
+- Professional software activation binding
+
+## Protection Integration Points
+- Statistical validation engine tie-ins
+- License management system security hooks
+- Server-side validation mechanisms
+- Hardware fingerprint verification workflows
+- Integrity monitoring integration
 
 $END$
 
