@@ -14,13 +14,13 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 ---
 
 ### **Overview**
-CONFIRM Statistical Validation Engine is a professional statistical analysis platform designed for comprehensive data validation and contingency analysis. The software provides advanced statistical processing capabilities with hardware-bound licensing for commercial use.
+CONFIRM Statistical Validation Engine is a professional statistical analysis platform designed for comprehensive data validation and contingency analysis. The software provides advanced statistical processing capabilities for validating machine learning clustering models such as Self-Organizing Maps (SOMs).
 
 ### **System Requirements**
 - **Operating System**: Windows 10/11 (64-bit)
 - **Memory**: 8 GB RAM minimum, 16 GB recommended
 - **Storage**: 100 MB free space
-- **Network**: Internet connection required for license validation
+- **Network**: Optional internet connection for one-time activation (if required by your deployment)
 - **File Support**: Microsoft Excel (.xlsx, .xls) files
 
 ### **Installation**
@@ -35,19 +35,17 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 2. Double-click to run directly
 3. No installation required
 
-### **License Activation**
+### **Activation & Setup (Operations-Managed)**
 
 #### **First-Time Setup**
 1. Launch CONFIRM.exe
-2. Enter your license key when prompted
-3. License will be automatically bound to your computer
-4. License is saved securely for future use
+2. If an activation prompt appears, follow the on-screen instructions once and continue to the dashboard
+3. Activation is bound to your workstation automatically and maintained by TraceSeis operations
 
-#### **License Information**
+#### **Support**
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
 - **Contact**: info@traceseis.com or alvarochf@traceseis.com
-- **Security**: Each license is bound to one computer only
-- **Validation**: Automatic online license verification
+- **Security**: Activation data is stored locally and secured automatically
 
 ### **Main Features**
 
@@ -169,13 +167,13 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 ### **Troubleshooting**
 
 #### **Common Issues**
-- **License Errors**: Contact support for license issues
+- **Activation Prompts**: Contact support if an unexpected activation message appears
 - **File Loading**: Ensure Excel file is not corrupted
 - **Memory Issues**: Close other applications if processing large files
-- **Network Issues**: Check internet connection for license validation
+- **Network Issues**: Check internet connection if your deployment relies on activation or remote resources
 
 #### **Error Messages**
-- **"License validation failed"**: Check license key or contact support
+- **"Activation required"**: Confirm network access or contact support
 - **"File security validation failed"**: File may be corrupted or unsafe
 - **"Data validation failed"**: Check data format and structure
 - **"Processing timeout"**: Large files may require more time
@@ -187,17 +185,17 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 - **Company**: TraceSeis, Inc.® - deltaV solutions division
 - **Documentation**: This user manual
 
-#### **License Management**
-- **Hardware Binding**: Each license is bound to one computer
-- **License Transfer**: Contact support for license transfers
-- **Expiration**: Check license expiration date in application
+#### **Activation Oversight (Operations)**
+- **Workstation Binding**: Activation associates the tool with a single workstation
+- **Transfer Requests**: Contact support if a workstation change is required
+- **Status Checks**: Activation state is viewable from the application dashboard
 
 ### **Security Features**
 
-#### **License Protection**
-- Hardware fingerprinting
-- Encrypted license storage
-- Online validation
+#### **Operational Safeguards**
+- Hardware fingerprinting (operations-managed)
+- Encrypted activation cache
+- Optional online activation check
 - Anti-tampering protection
 
 #### **Data Security**
@@ -223,7 +221,7 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 - **Version**: 1.0.0
 - **Build**: Commercial Release
 - **Platform**: Windows 64-bit
-- **License**: Commercial Software License
+- **Deployment**: Commercial distribution with operations-managed activation
 
 ---
 

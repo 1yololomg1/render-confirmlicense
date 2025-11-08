@@ -1,5 +1,5 @@
 ---
-description: Comprehensive license management system for statistical software with hardware binding and tiered access control
+description: Documents complex license management workflows including creation, validation, hardware binding, and migration processes
 ---
 
 # === USER INSTRUCTIONS ===
@@ -188,78 +188,68 @@ description: Documents license lifecycle management including creation, validati
 - Grace period duration rules
 - Hardware binding requirements per tier
 $END$
+
 # === END USER INSTRUCTIONS ===
 # === END USER INSTRUCTIONS ===
 
 # license-workflow
 
-## License States and Transitions
 Importance Score: 85/100
 
-States:
-1. Unactivated (Initial)
-2. Active
-3. Grace Period (72h offline allowance)
-4. Revoked
-5. Migrated (from legacy format)
+## Core License Management Flow
 
-## License Creation Flow
-
-### Hardware Binding Process
-- Generates unique identifier using:
+1. License Creation and Hardware Binding
+- Generates license keys with unique hardware fingerprinting
+- Combines multiple hardware identifiers:
   - CPU ID
   - Motherboard serial
   - BIOS information
-- Encrypts credentials with hardware-specific keys
-- Validates against VM/sandbox environments
+  - MAC address
+- Creates binding between license and hardware profile
 
-### Tier Assignment
-- Student: Annual validity
-- Startup: Monthly validity
-- Professional: Monthly/Annual options
-- Enterprise: Custom terms
-- OEM/White-label: Special provisions
+2. License Validation System
+- Runtime integrity validation with memory tampering detection
+- Process monitoring for anti-debugging protection
+- Virtual machine/sandbox environment detection
+- Hardware binding verification with configurable grace periods
 
-## Validation Workflow
-Importance Score: 80/100
+3. Migration Workflow
+- Legacy license format detection
+- Automated conversion to new secure format
+- Preservation of expiry dates and permission sets
+- Migration audit trail maintenance
+- Database reference updates with history tracking
 
-1. Hardware Fingerprint Verification
-2. Tier-specific Feature Access Control
-3. Runtime Integrity Checks
-4. Anti-tampering Validation
-5. Sandbox Detection
+## License Security Components
 
-## License Migration System
-Importance Score: 75/100
+1. Protection Module (protection_module.py)
+- Custom hardware fingerprint generation
+- Anti-debugging protection layer
+- Runtime memory validation
+- Virtualization detection system
 
-- Legacy format detection
-- Key transformation rules
-- Hardware rebinding process
-- Tier mapping for legacy licenses
-- Historical usage preservation
+2. License Server (server.mjs)
+- License key generation engine
+- Hardware binding processor
+- Expiration date calculator based on license tier
+- Migration handler for legacy formats
 
-## Revocation Process
-- Hardware binding invalidation
-- Grace period management
-- Tier access termination
-- Feature deactivation sequence
-- Migration state preservation
+## State Transitions
 
-## Integration Points
-File: `01_SOURCE_CODE/protection_module.py`
-- Runtime integrity monitoring
-- Anti-debugging enforcement
-- Memory protection checks
+1. Active → Grace Period
+- Triggered by hardware changes
+- Limited duration allowance
+- Maintains original permissions
 
-File: `01_SOURCE_CODE/license_manager_gui.py`
-- License administration interface
-- Tier management controls
-- Hardware binding tools
+2. Active → Expired
+- Time-based expiration
+- Usage count depletion
+- Hardware binding violation
 
-File: `server.mjs`
-- Remote validation endpoints
-- Migration service handlers
-- Tier access controllers
+3. Legacy → Migrated
+- Format conversion
+- Binding preservation
+- Audit record creation
 
 $END$
 

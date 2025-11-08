@@ -99,45 +99,43 @@ $END$
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-Commercial software protection and licensing system for statistical analysis tools, built around three core components:
+The system implements three primary business domains with an overall importance score of 85/100:
 
-## Protection Core (`01_SOURCE_CODE/protection_module.py`)
-Hardware-based fingerprinting and runtime protection system utilizing:
-- CPU ID validation
-- Motherboard serial tracking
-- BIOS data verification
-- Active integrity monitoring
-- VM/sandbox detection logic
+## Statistical Model Validation Engine 
+Located in `01_SOURCE_CODE/CONFIRM_Integrated.py`, this component processes clustering and SOM analysis results by:
+- Converting neuron assignments into confusion matrices
+- Calculating validation metrics including precision, recall, and F1-scores
+- Performing statistical significance testing via Chi-square analysis
+- Processing multi-sheet model validation batches
 
-## License Management (`01_SOURCE_CODE/license_manager_gui.py`)
-Multi-tier license administration system implementing:
-- Student/Startup/Professional/Enterprise tier management
-- Hardware-bound license enforcement
-- Statistical software-specific validation workflows
-- Hardware-encrypted credential storage
+## License Protection System
+Implemented in `01_SOURCE_CODE/protection_module.py`, providing:
+- Hardware-based fingerprinting using CPU, motherboard, BIOS and MAC identifiers
+- Anti-debugging protection with process monitoring
+- Runtime integrity validation
+- Virtual machine and sandbox detection
 
-## License Server (`server.mjs`)
-Central validation service providing:
-- Hardware-bound license validation
-- Legacy license migration pathways
-- Tier-specific access control
-- Statistical package validation
-- Professional activation workflows
+## License Management Server
+Core licensing logic in `server.mjs` handles:
+- Hardware-bound license key generation 
+- Migration pathway for legacy license formats
+- Tier-based expiry calculations
+- Hardware binding validation with grace periods
 
-## Business Tier Structure
-- Student: Annual licensing model
-- Startup: Monthly licensing model
-- Professional: Flexible monthly/annual options
-- Enterprise: Customizable terms with support
-- OEM/White-label options available
+The system integrates these components through two main workflows:
 
-## Protection Mechanisms
-- 72-hour offline grace period
-- Runtime integrity verification
-- Anti-debugging protections
-- Sandbox environment detection
-- API hook prevention
-- Memory patch detection
+1. Model Validation Workflow:
+- Processes Excel-based SOM/clustering outputs
+- Generates statistical validation metrics
+- Produces QC-graded validation reports
+
+2. License Security Workflow:
+- Creates unique hardware fingerprints
+- Manages license binding and secure storage
+- Provides tamper protection
+- Handles offline grace periods
+
+The business logic emphasizes statistical model validation and secure software licensing through hardware binding, making it specialized for enterprise machine learning validation and commercial software protection.
 
 $END$
 

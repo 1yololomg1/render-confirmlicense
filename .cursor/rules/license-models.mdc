@@ -1,5 +1,5 @@
 ---
-description: Handles license data models, types, and hardware binding relationships for statistical software protection
+description: Specification for license management models, hardware binding, and tier-based licensing system
 ---
 
 # === USER INSTRUCTIONS ===
@@ -174,6 +174,7 @@ Hardware-based fingerprinting using:
 - Department-level access control
 - License pool allocation tracking
 $END$
+
 # === END USER INSTRUCTIONS ===
 # === END USER INSTRUCTIONS ===
 
@@ -181,58 +182,61 @@ $END$
 
 Importance Score: 85/100
 
-## License Tier Structure
+## License Model Structure
 
-The system implements a hierarchical license model with four distinct tiers:
+The system implements a hardware-bound licensing system with multiple tiers:
+- Student
+- Startup
+- Professional  
+- Enterprise
 
-1. Student
-- Annual licensing period
-- Basic feature access
-- Hardware binding required
+Each license incorporates:
+- Hardware fingerprinting using multiple identifiers
+  - CPU ID
+  - Motherboard serial
+  - BIOS information
+  - MAC address binding
+- Custom expiry calculation per tier
+- Migration support between formats
+- Grace period handling for hardware changes
 
-2. Startup
-- Monthly licensing structure
-- Intermediate feature set
-- Hardware fingerprinting enforcement
+## Core Components
 
-3. Professional
-- Monthly or annual options
-- Full feature access
-- Strict hardware binding
-- Runtime integrity monitoring
+### Hardware Binding System
+Located in 01_SOURCE_CODE/protection_module.py:
+- Multi-factor hardware fingerprinting
+- Runtime integrity validation
+- Anti-debugging protection
+- Virtual machine detection
+- Sandbox environment detection
 
-4. Enterprise
-- Custom licensing terms
-- Complete feature set
-- Support package inclusion
-- OEM/White-label options
+### License Server
+Located in server.mjs:
+- Combined hardware-bound key generation
+- Legacy format migration system
+- Tier-based expiry management
+- Grace period validation logic
+- Hardware binding verification
 
-## Hardware Binding Model
+## Business Workflows
 
-License validation requires multiple hardware identifiers:
-- CPU ID
-- Motherboard serial number
-- BIOS information
-- System fingerprinting
+1. License Binding
+- Hardware identifier collection
+- Secure fingerprint generation
+- License key combination
+- Local storage encryption
 
-These components are integrated into a composite hardware signature used for:
-- License activation
-- Runtime validation
-- Migration verification
+2. License Migration
+- Legacy format detection
+- Permission mapping
+- Expiry date preservation
+- Audit trail maintenance
 
-## Validation Rules
-
-License enforcement implements:
-1. 72-hour offline grace period
-2. Anti-VM detection
-3. Hardware signature verification
-4. Tier-specific feature gates
-5. Legacy license format migration
-
-Files:
-- `01_SOURCE_CODE/license_manager_gui.py`: Primary license model implementation
-- `01_SOURCE_CODE/protection_module.py`: Hardware binding logic
-- `server.mjs`: License validation and tier management
+3. Hardware Change Management
+- Grace period activation
+- Binding revalidation
+- Migration tracking
+- Hardware change limits
 
 $END$
 
