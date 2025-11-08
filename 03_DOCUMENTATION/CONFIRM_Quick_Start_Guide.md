@@ -17,8 +17,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 
 #### **1. Launch the Application**
 - Double-click `CONFIRM.exe`
-- Wait for license validation (first time only)
-- Enter your license key when prompted
+- Wait for the application to initialize. If your organization uses an activation workflow, follow the on-screen prompt once and continue to the dashboard
 
 #### **2. Load Your Data**
 - Click **"Browse File"** button
@@ -92,10 +91,10 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 
 ### **Troubleshooting Quick Fixes**
 
-#### **"License Error"**
-- Check internet connection
-- Verify license key is correct
-- Contact support if needed
+#### **"Startup Connection Issue"**
+- Check your internet connection
+- If activation is required in your environment, confirm the activation service is reachable
+- Contact support if the message persists
 
 #### **"File Won't Load"**
 - Ensure file is Excel format (.xlsx, .xls)

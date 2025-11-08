@@ -1,5 +1,5 @@
 ---
-description: Security implementation specification for anti-tampering, VM detection, and cryptographic validation in statistical software protection
+description: Security implementation analysis for software protection, anti-tampering, and license validation systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -214,54 +214,54 @@ $END$
 # === END USER INSTRUCTIONS ===
 
 # security-implementation
-Importance Score: 90/100
 
-## Core Protection Layers
+Importance Score: 85/100
 
-### Anti-Tampering System
-Path: `01_SOURCE_CODE/protection_module.py`
-- Hardware fingerprinting implementation using:
+## Multi-Layer Protection System
+
+### Hardware-Based Security
+- Hardware fingerprinting using multiple system identifiers:
   - CPU ID extraction
   - Motherboard serial number validation
-  - BIOS data verification
-- Runtime integrity monitoring with continuous validation checks
-- Memory patching detection for preventing runtime modifications
+  - BIOS information gathering
+  - MAC address verification
+- Combined hardware binding for license keys
 
-### Virtualization Protection
-Path: `01_SOURCE_CODE/protection_module.py`
-- VM/sandbox detection mechanisms
-- Hardware environment validation
-- Anti-debugging measures implementation
-- API hooking prevention system
+### Anti-Tampering Protection
+- Runtime integrity validation system
+- Memory patching detection mechanisms
+- Process monitoring for debugging attempts
+- Active anti-debugging countermeasures
 
-### Cryptographic Security
-Path: `01_SOURCE_CODE/license_manager_gui.py`
-- Hardware-bound encryption for credential storage
-- Secure validation workflows for license verification
-- Custom encryption tied to hardware identifiers
+### Virtualization Detection
+- Virtual machine environment detection
+- Sandbox execution prevention
+- Hardware emulation identification
+- System environment validation
 
-## License Security Implementation
+## License Management Security
 
 ### Hardware Binding
-Path: `server.mjs`
-- Multiple system identifier collection
-- Hardware-specific license generation
-- Binding validation on activation
-- Migration system for legacy key formats with security preservation
+- Secure storage of hardware-bound licenses
+- Grace period handling for hardware changes
+- Multiple identifier verification system
+- Binding validation with fallback mechanisms
+
+### License Format Migration
+- Secure conversion of legacy license formats
+- Encryption of migrated license data
+- Audit trail maintenance for migrations
+- Database reference preservation
 
 ### Runtime Protection
-- Continuous integrity monitoring during execution
-- Anti-debugging implementations
-- Protected memory regions for license data
-- Sandbox escape detection
+- Active process monitoring
+- Integrity checking during execution
+- Secure storage of runtime validation data
+- Tamper response mechanisms
 
-### Tier-Based Security
-- Unique validation rules per license tier:
-  - Student: Annual validation checks
-  - Startup: Monthly verification
-  - Professional: Dual-mode verification
-  - Enterprise: Custom security protocols
-- OEM security customization options
+Implementation Locations:
+- /01_SOURCE_CODE/protection_module.py
+- /server.mjs
 
 $END$
 

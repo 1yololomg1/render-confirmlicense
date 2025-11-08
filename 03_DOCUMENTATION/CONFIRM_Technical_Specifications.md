@@ -17,7 +17,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 - **Application Name**: CONFIRM Statistical Validation Engine
 - **Version**: 1.0.0
 - **Developer**: TraceSeis, Inc.® - deltaV solutions division
-- **License Type**: Commercial Software License
+- **Distribution**: Commercial deployment (one-time activation managed by TraceSeis operations)
 - **Platform**: Windows 64-bit
 
 ### **System Requirements**
@@ -27,7 +27,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 - **Processor**: Intel Core i3 or AMD equivalent
 - **Memory**: 8 GB RAM
 - **Storage**: 100 MB available space
-- **Network**: Internet connection for license validation
+- **Network**: Optional internet connection for initial activation and updates
 - **Display**: 1280x720 resolution minimum
 
 #### **Recommended Requirements**
@@ -71,16 +71,16 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 
 ### **Security Features**
 
-#### **License Protection**
-- **Hardware Fingerprinting**: CPU ID, motherboard serial, MAC address
-- **Encrypted Storage**: Fernet encryption for license data
-- **Online Validation**: Server-side license verification
+#### **Operational Activation Safeguards**
+- **Hardware Fingerprinting**: CPU ID, motherboard serial, MAC address (used internally to protect deployments)
+- **Encrypted Storage**: Fernet encryption for locally cached activation data
+- **Online Check (Optional)**: Operations-managed verification endpoint
 - **Anti-Tampering**: Runtime protection against modification
 
 #### **Data Security**
 - **File Validation**: Security scanning before processing
 - **Local Processing**: No data transmission to external servers
-- **Encrypted Storage**: Secure configuration and license storage
+- **Encrypted Storage**: Secure configuration retention
 - **Memory Protection**: Secure memory cleanup on exit
 
 ### **Performance Specifications**
@@ -128,7 +128,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 
 #### **Application Structure**
 - **Main Application**: StatisticalAnalyzer class
-- **License Management**: LicenseDialog and validation system
+- **Secure Activation Workflow**: Background activation check (operations-managed)
 - **Data Processing**: Multi-threaded batch processing
 - **Visualization**: Chart generation and display
 - **Export System**: Results and chart export
@@ -136,7 +136,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 #### **Threading Model**
 - **Main Thread**: GUI and user interaction
 - **Processing Threads**: Statistical analysis (up to 4 workers)
-- **Background Threads**: License validation and monitoring
+- **Background Threads**: Activation handshake/status checks (if enabled)
 - **Thread Safety**: Comprehensive locking and synchronization
 
 ### **Configuration**
@@ -152,7 +152,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 - **Log Level**: INFO
 - **Log File**: ~/.confirm/confirm.log
 - **Config Directory**: ~/.confirm/
-- **License File**: ~/.confirm/confirm_license.json
+- **Activation Cache**: ~/.confirm/confirm_license.json (secure cache managed automatically)
 - **Settings File**: ~/.confirm/settings.json
 
 ### **Error Handling**
@@ -160,7 +160,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 #### **Validation Errors**
 - **File Security**: Malicious file detection
 - **Data Format**: Invalid data structure handling
-- **License Issues**: License validation error handling
+- **Activation Checks**: Activation handshake/timeout handling
 - **Network Errors**: Connection failure handling
 
 #### **Processing Errors**
@@ -197,20 +197,7 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 - **Protection**: Commercial-grade obfuscation
 - **Dependencies**: All included (standalone)
 
-### **License Server**
-
-#### **Server Information**
-- **Primary Server**: https://render-confirmlicense.onrender.com
-- **Backup Server**: https://confirm-license-manager-default-rtdb.firebaseio.com
-- **Protocol**: HTTPS REST API
-- **Authentication**: Token-based authentication
-
-#### **License Tiers**
-- **Professional Monthly**: Monthly subscription license
-- **Professional Yearly**: Annual professional license
-- **Enterprise**: Enterprise license with manual approval
-- **Enterprise Yearly**: Annual enterprise license
-- **Trial Version**: Limited trial license
+> Operational teams maintain the secure activation infrastructure separately. End users only interact with the validation features described in this document.
 
 ### **Support Information**
 

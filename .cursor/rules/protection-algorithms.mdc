@@ -1,5 +1,5 @@
 ---
-description: Protection algorithms for commercial software licensing and anti-tampering mechanisms
+description: Documentation for software protection, anti-debugging, and hardware fingerprinting systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -155,48 +155,54 @@ Core security mechanisms represent critical business value through:
 - Multi-factor license protection
 - Enterprise-grade security protocols
 $END$
+
 # === END USER INSTRUCTIONS ===
 # === END USER INSTRUCTIONS ===
 
 # protection-algorithms
 
-Importance Score: 90/100
+Importance Score: 85/100
 
-## Hardware Fingerprinting System
-- CPU ID collection and validation
-- Motherboard serial number extraction
-- BIOS data fingerprinting
-- Composite hardware identifier generation
-- System-specific binding for license enforcement
+Hardware Fingerprinting System:
+- Multi-component system identification using:
+  - CPU ID extraction
+  - Motherboard serial number
+  - BIOS information
+  - MAC address collection
+- Combined fingerprint generation with hardware binding
 
-## Anti-Tampering Protection
-Located in: `01_SOURCE_CODE/protection_module.py`
-- Runtime integrity monitoring for statistical software
-- Memory patching detection mechanisms
-- API hooking prevention systems
-- Process debugging detection
-- VM/sandbox environment detection
+Anti-Debugging Protection:
+- Process monitoring for debugger detection
+- Runtime memory integrity validation
+- Detection of memory patching attempts
+- Virtual machine environment detection
+- Sandbox environment identification
 
-## Runtime Verification
-- Continuous integrity checks during software execution
-- Hardware binding validation at runtime
-- License tier verification against system fingerprint
-- Anti-debugging measure enforcement
-- Sandbox escape detection
+Runtime Protection Mechanisms:
+- Hardware binding validation checks
+- Grace period management for offline usage
+- License format verification
+- Migration handling for legacy license formats
 
-## Security Implementation Details
-- Hardware-bound encryption for credential storage
-- Anti-VM measures for license protection
-- Multiple system identifier validation
-- Runtime protection against memory modifications
-- Professional software activation binding
+Integration Points:
+1. License Management Server
+- Hardware-bound key generation
+- License tier validation
+- Expiry calculations
+- Grace period enforcement
 
-## Protection Integration Points
-- Statistical validation engine tie-ins
-- License management system security hooks
-- Server-side validation mechanisms
-- Hardware fingerprint verification workflows
-- Integrity monitoring integration
+2. Hardware Verification Flow:
+- System component fingerprinting
+- Binding validation
+- Tampering detection
+- Environment verification
+
+Key Security Features:
+- Combined hardware identifiers for unique system identification
+- Runtime integrity monitoring
+- Anti-debugging protection
+- Virtualization detection
+- License migration system with audit trails
 
 $END$
 
