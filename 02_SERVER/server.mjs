@@ -1257,6 +1257,37 @@ app.post('/admin/search-licenses', async (req, res) => {
   }
 });
 
+// Get all licenses endpoint
+app.get('/admin/all-licenses', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const snapshot = await db.ref('license').once('value');
+    const allLicenses = [];
+    
+    snapshot.forEach(child => {
+      allLicenses.push({
+        id: child.key,
+        ...child.val()
+      });
+    });
+    
+    // Sort by creation date (newest first)
+    allLicenses.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0);
+      const dateB = new Date(b.created_at || 0);
+      return dateB - dateA;
+    });
+    
+    res.json({ licenses: allLicenses, total: allLicenses.length });
+  } catch (error) {
+    console.error('Get all licenses error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/admin/update-license', async (req, res) => {
   if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
     return res.status(403).json({ error: 'Forbidden' });
