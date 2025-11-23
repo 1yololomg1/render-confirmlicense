@@ -971,6 +971,43 @@
             }
         }
 
+        async function deleteLicense() {
+            if (!currentLicenseId) return;
+            
+            if (!confirm('⚠️ WARNING: This will PERMANENTLY DELETE this license from the database.\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?')) {
+                return;
+            }
+
+            // Double confirmation for safety
+            if (!confirm('Last chance: DELETE this license forever?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${SERVER_URL}/admin/delete-license`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-app-secret': adminPassword
+                    },
+                    body: JSON.stringify({
+                        licenseId: currentLicenseId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+
+                alert('License permanently deleted!');
+                viewAllLicenses(); // Refresh the full list
+                closeLicenseDetails();
+
+            } catch (error) {
+                alert(`Failed to delete license: ${error.message}`);
+            }
+        }
+
         // Create License
         async function createLicense(event) {
             event.preventDefault();

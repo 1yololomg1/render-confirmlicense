@@ -1356,6 +1356,45 @@ app.post('/admin/update-license', async (req, res) => {
   }
 });
 
+// Admin endpoint to DELETE a license permanently
+app.post('/admin/delete-license', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const { licenseId } = req.body;
+    
+    if (!licenseId) {
+      return res.status(400).json({ error: 'License ID is required' });
+    }
+    
+    // Get license data before deleting (for logging)
+    const snapshot = await db.ref(`license/${licenseId}`).once('value');
+    const license = snapshot.val();
+    
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+    
+    // Log the deletion
+    console.log(`ADMIN DELETE: License ${licenseId} (${license.email || 'no email'}) deleted by admin`);
+    
+    // Permanently delete from Firebase
+    await db.ref(`license/${licenseId}`).remove();
+    
+    res.json({ 
+      success: true, 
+      message: 'License permanently deleted',
+      deletedLicenseId: licenseId
+    });
+    
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin endpoint to migrate all old licenses
 app.post('/admin/migrate-all-licenses', async (req, res) => {
   if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
