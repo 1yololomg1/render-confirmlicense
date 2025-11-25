@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONFIRM License Admin Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2E86AB 0%, #A23B72 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .admin-section {
+            padding: 30px;
+            border-bottom: 2px solid #e9ecef;
+            background: #f8f9fa;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        input[type="password"],
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #f44336 0%, #e91e63 100%);
+        }
+
+        button.success {
+            background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%);
+        }
+
+        button.warning {
+            background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+        }
+
+        .tabs {
+            display: flex;
+            background: #e9ecef;
+            padding: 0;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            background: #e9ecef;
+            border: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .tab:hover {
+            background: #dee2e6;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 30px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .licenses-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .licenses-table thead {
+            background: #2E86AB;
+            color: white;
+        }
+
+        .licenses-table th,
+        .licenses-table td {
+            padding: 15px;
+            text-align: left;
+        }
+
+        .licenses-table tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .licenses-table tbody tr:hover {
+            background: #e9ecef;
+        }
+
+        .licenses-table tbody tr.duplicate-machine {
+            background: #fff3cd !important;
+            border-left: 4px solid #ff9800;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.revoked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .badge.duplicate {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 0.9em;
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .machine-lookup {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ff9800;
+        }
+
+        .machine-lookup h3 {
+            margin-bottom: 15px;
+            color: #856404;
+        }
+
+        .machine-lookup-input {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .machine-lookup-input input {
+            flex: 1;
+        }
+
+        .lookup-result {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .lookup-result.show {
+            display: block;
+        }
+
+        .lookup-result.found {
+            border-left: 4px solid #4caf50;
+        }
+
+        .lookup-result.not-found {
+            border-left: 4px solid #f44336;
+        }
+
+        .lookup-result.duplicate {
+            border-left: 4px solid #ff9800;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #6c757d;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #f44336;
+        }
+
+        .success-msg {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #4caf50;
+        }
+
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #2E86AB;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+
+        .firebase-config {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .firebase-config label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .firebase-config input {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 CONFIRM License Manager</h1>
+            <p>Manage active and inactive licenses • Machine ID Lookup</p>
+        </div>
+
+        <div class="admin-section">
+            <div class="firebase-config">
+                <label for="firebaseUrl">Firebase Database URL:</label>
+                <input type="text" id="firebaseUrl" 
+                       placeholder="https://your-project.firebaseio.com" 
+                       value="https://confirm-license-manager-default-rtdb.firebaseio.com">
+                
+                <label for="authToken">Firebase Auth Token:</label>
+                <input type="password" id="authToken" 
+                       placeholder="Enter your Firebase auth token">
+                
+                <button onclick="connectFirebase()" class="success">Connect to Firebase</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('active')">Active Licenses</button>
+            <button class="tab" onclick="showTab('inactive')">Inactive/Revoked Licenses</button>
+            <button class="tab" onclick="showTab('machine')">🔍 Machine Lookup</button>
+            <button class="tab" onclick="showTab('stats')">Statistics</button>
+        </div>
+
+        <div id="active-tab" class="tab-content active">
+            <div class="search-box">
+                <input type="text" id="activeSearch" placeholder="Search active licenses (Email, Computer ID, License Key)..." 
+                       onkeyup="filterTable('activeTable', 'activeSearch')">
+            </div>
+            
+            <div id="activeLoading" class="loading">Connect to Firebase to load licenses...</div>
+            <div id="activeError" class="error" style="display:none;"></div>
+            
+            <table class="licenses-table" id="activeTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>License Key</th>
+                        <th>Email</th>
+                        <th>Computer ID</th>
+                        <th>Tier</th>
+                        <th>Created</th>
+                        <th>Expires</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="activeTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="inactive-tab" class="tab-content">
+            <div class="search-box">
+                <input type="text" id="inactiveSearch" placeholder="Search inactive licenses (Email, Computer ID, License Key)..." 
+                       onkeyup="filterTable('inactiveTable', 'inactiveSearch')">
+            </div>
+            
+            <div id="inactiveLoading" class="loading">Connect to Firebase to load licenses...</div>
+            <div id="inactiveError" class="error" style="display:none;"></div>
+            
+            <table class="licenses-table" id="inactiveTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>License Key</th>
+                        <th>Email</th>
+                        <th>Computer ID</th>
+                        <th>Tier</th>
+                        <th>Revoked Date</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inactiveTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="machine-tab" class="tab-content">
+            <div class="machine-lookup">
+                <h3>🔍 Machine ID Lookup</h3>
+                <p style="margin-bottom: 15px; color: #856404;">Search for licenses associated with a specific machine/computer ID</p>
+                
+                <div class="machine-lookup-input">
+                    <input type="text" id="machineIdInput" placeholder="Enter machine/computer ID (e.g., b3f18bafd85e)">
+                    <button onclick="lookupMachineId()" class="warning">Search</button>
+                </div>
+
+                <div id="lookupResult" class="lookup-result">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+
+            <div id="duplicateWarning" class="warning" style="display:none;">
+                <h3>⚠️ Machines with Multiple Licenses</h3>
+                <div id="duplicateList"></div>
+            </div>
+        </div>
+
+        <div id="stats-tab" class="tab-content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Active</h3>
+                    <div class="number" id="totalActive">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Inactive</h3>
+                    <div class="number" id="totalInactive">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Licenses</h3>
+                    <div class="number" id="totalLicenses">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Revoked Today</h3>
+                    <div class="number" id="revokedToday">0</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);">
+                    <h3>Duplicate Machines</h3>
+                    <div class="number" id="duplicateMachines">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revoke Modal -->
+    <div id="revokeModal" class="modal">
+        <div class="modal-content">
+            <h2>Revoke License</h2>
+            <p>Are you sure you want to revoke this license?</p>
+            <p><strong>License Key:</strong> <span id="revokeKeyDisplay"></span></p>
+            
+            <label for="revokeReason">Reason for revocation:</label>
+            <input type="text" id="revokeReason" placeholder="e.g., Payment failed, Policy violation" style="width: 100%; margin: 10px 0;">
+            
+            <div class="modal-actions">
+                <button onclick="closeRevokeModal()">Cancel</button>
+                <button class="danger" onclick="confirmRevoke()">Revoke License</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reactivate Modal -->
+    <div id="reactivateModal" class="modal">
+        <div class="modal-content">
+            <h2>Reactivate License</h2>
+            <p>Are you sure you want to reactivate this license?</p>
+            <p><strong>License Key:</strong> <span id="reactivateKeyDisplay"></span></p>
+            
+            <div class="modal-actions">
+                <button onclick="closeReactivateModal()">Cancel</button>
+                <button class="success" onclick="confirmReactivate()">Reactivate License</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let firebaseUrl = '';
+        let authToken = '';
+        let currentRevokeKey = '';
+        let currentReactivateKey = '';
+        let activeLicenses = {};
+        let inactiveLicenses = {};
+        let machineIdMap = {}; // Maps machine_id -> array of license keys
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function connectFirebase() {
+            firebaseUrl = document.getElementById('firebaseUrl').value.trim();
+            authToken = document.getElementById('authToken').value.trim();
+
+            if (!firebaseUrl || !authToken) {
+                alert('Please provide both Firebase URL and Auth Token');
+                return;
+            }
+
+            // Remove trailing slash from URL
+            firebaseUrl = firebaseUrl.replace(/\/$/, '');
+
+            await loadLicenses();
+        }
+
+        async function loadLicenses() {
+            try {
+                // Show loading
+                document.getElementById('activeLoading').style.display = 'block';
+                document.getElementById('inactiveLoading').style.display = 'block';
+
+                // Load active licenses
+                const activeResponse = await fetch(`${firebaseUrl}/licenses/active.json?auth=${authToken}`);
+                if (!activeResponse.ok) throw new Error('Failed to load active licenses');
+                activeLicenses = await activeResponse.json() || {};
+
+                // Load inactive licenses
+                const inactiveResponse = await fetch(`${firebaseUrl}/licenses/inactive.json?auth=${authToken}`);
+                if (!inactiveResponse.ok) throw new Error('Failed to load inactive licenses');
+                inactiveLicenses = await inactiveResponse.json() || {};
+
+                // Hide loading, show tables
+                document.getElementById('activeLoading').style.display = 'none';
+                document.getElementById('inactiveLoading').style.display = 'none';
+                document.getElementById('activeTable').style.display = 'table';
+                document.getElementById('inactiveTable').style.display = 'table';
+
+                // Build machine ID map
+                buildMachineIdMap();
+
+                renderActiveLicenses();
+                renderInactiveLicenses();
+                checkForDuplicateMachines();
+                updateStats();
+
+            } catch (error) {
+                console.error('Error loading licenses:', error);
+                document.getElementById('activeError').textContent = 'Error: ' + error.message;
+                document.getElementById('activeError').style.display = 'block';
+                document.getElementById('activeLoading').style.display = 'none';
+            }
+        }
+
+        function buildMachineIdMap() {
+            machineIdMap = {};
+            
+            // Map active licenses
+            Object.entries(activeLicenses).forEach(([key, license]) => {
+                const machineId = license.computer_id;
+                if (machineId) {
+                    if (!machineIdMap[machineId]) {
+                        machineIdMap[machineId] = [];
+                    }
+                    machineIdMap[machineId].push({
+                        key: key,
+                        license: license,
+                        status: 'active'
+                    });
+                }
+            });
+
+            // Map inactive licenses
+            Object.entries(inactiveLicenses).forEach(([key, license]) => {
+                const machineId = license.computer_id;
+                if (machineId) {
+                    if (!machineIdMap[machineId]) {
+                        machineIdMap[machineId] = [];
+                    }
+                    machineIdMap[machineId].push({
+                        key: key,
+                        license: license,
+                        status: 'inactive'
+                    });
+                }
+            });
+        }
+
+        function checkForDuplicateMachines() {
+            const duplicates = Object.entries(machineIdMap).filter(([machineId, licenses]) => {
+                // Count only ACTIVE licenses
+                const activeLicenseCount = licenses.filter(l => l.status === 'active').length;
+                return activeLicenseCount > 1;
+            });
+
+            if (duplicates.length > 0) {
+                const duplicateList = document.getElementById('duplicateList');
+                duplicateList.innerHTML = '<ul style="margin-left: 20px; margin-top: 10px;">';
+                
+                duplicates.forEach(([machineId, licenses]) => {
+                    const activeLics = licenses.filter(l => l.status === 'active');
+                    duplicateList.innerHTML += `
+                        <li style="margin: 10px 0;">
+                            <strong>Machine ID:</strong> ${machineId}<br>
+                            <strong>Active Licenses:</strong> ${activeLics.length}<br>
+                            <small>${activeLics.map(l => l.key.substring(0,8) + '...').join(', ')}</small>
+                        </li>
+                    `;
+                });
+                
+                duplicateList.innerHTML += '</ul>';
+                document.getElementById('duplicateWarning').style.display = 'block';
+            } else {
+                document.getElementById('duplicateWarning').style.display = 'none';
+            }
+        }
+
+        function renderActiveLicenses() {
+            const tbody = document.getElementById('activeTableBody');
+            tbody.innerHTML = '';
+
+            Object.entries(activeLicenses).forEach(([key, license]) => {
+                const row = tbody.insertRow();
+                
+                // Check if this machine has multiple licenses
+                const machineId = license.computer_id;
+                const isDuplicate = machineId && machineIdMap[machineId] && 
+                                   machineIdMap[machineId].filter(l => l.status === 'active').length > 1;
+                
+                if (isDuplicate) {
+                    row.classList.add('duplicate-machine');
+                }
+
+                row.innerHTML = `
+                    <td>${key.substring(0, 8)}...${key.substring(key.length - 4)}</td>
+                    <td>${license.email || 'N/A'}</td>
+                    <td>
+                        ${license.computer_id || 'N/A'}
+                        ${isDuplicate ? '<br><span class="badge duplicate">DUPLICATE</span>' : ''}
+                    </td>
+                    <td>${license.tier || 'standard'}</td>
+                    <td>${new Date(license.created_at).toLocaleDateString()}</td>
+                    <td>${license.expires_at ? new Date(license.expires_at).toLocaleDateString() : 'Never'}</td>
+                    <td><span class="badge active">Active</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-small danger" onclick="showRevokeModal('${key}')">Revoke</button>
+                        </div>
+                    </td>
+                `;
+            });
+        }
+
+        function renderInactiveLicenses() {
+            const tbody = document.getElementById('inactiveTableBody');
+            tbody.innerHTML = '';
+
+            Object.entries(inactiveLicenses).forEach(([key, license]) => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${key.substring(0, 8)}...${key.substring(key.length - 4)}</td>
+                    <td>${license.email || 'N/A'}</td>
+                    <td>${license.computer_id || 'N/A'}</td>
+                    <td>${license.tier || 'standard'}</td>
+                    <td>${license.revoked_at ? new Date(license.revoked_at).toLocaleDateString() : 'N/A'}</td>
+                    <td>${license.revoke_reason || 'No reason provided'}</td>
+                    <td><span class="badge revoked">Revoked</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-small success" onclick="showReactivateModal('${key}')">Reactivate</button>
+                        </div>
+                    </td>
+                `;
+            });
+        }
+
+        function lookupMachineId() {
+            const machineId = document.getElementById('machineIdInput').value.trim();
+            const resultDiv = document.getElementById('lookupResult');
+
+            if (!machineId) {
+                alert('Please enter a machine ID');
+                return;
+            }
+
+            const licenses = machineIdMap[machineId];
+
+            if (!licenses || licenses.length === 0) {
+                resultDiv.className = 'lookup-result show not-found';
+                resultDiv.innerHTML = `
+                    <h4 style="color: #f44336;">❌ No License Found</h4>
+                    <p>No licenses found for machine ID: <strong>${machineId}</strong></p>
+                `;
+                return;
+            }
+
+            const activeLics = licenses.filter(l => l.status === 'active');
+            const inactiveLics = licenses.filter(l => l.status === 'inactive');
+
+            let resultClass = 'lookup-result show found';
+            if (activeLics.length > 1) {
+                resultClass = 'lookup-result show duplicate';
+            }
+
+            resultDiv.className = resultClass;
+            
+            let html = `<h4 style="color: ${activeLics.length > 1 ? '#ff9800' : '#4caf50'};">`;
+            html += activeLics.length > 1 ? '⚠️ Multiple Licenses Found!' : '✅ License Found';
+            html += `</h4>`;
+            html += `<p style="margin: 10px 0;"><strong>Machine ID:</strong> ${machineId}</p>`;
+            
+            if (activeLics.length > 0) {
+                html += `<div style="margin-top: 15px;"><strong>Active Licenses (${activeLics.length}):</strong><ul style="margin-left: 20px;">`;
+                activeLics.forEach(item => {
+                    html += `
+                        <li style="margin: 10px 0;">
+                            <strong>License:</strong> ${item.key.substring(0,12)}...${item.key.substring(item.key.length-4)}<br>
+                            <strong>Email:</strong> ${item.license.email || 'N/A'}<br>
+                            <strong>Tier:</strong> ${item.license.tier || 'standard'}<br>
+                            <strong>Created:</strong> ${new Date(item.license.created_at).toLocaleDateString()}<br>
+                            <button class="btn-small danger" style="margin-top: 10px;" onclick="showRevokeModal('${item.key}')">Revoke</button>
+                        </li>
+                    `;
+                });
+                html += '</ul></div>';
+            }
+
+            if (inactiveLics.length > 0) {
+                html += `<div style="margin-top: 15px;"><strong>Inactive/Revoked Licenses (${inactiveLics.length}):</strong><ul style="margin-left: 20px;">`;
+                inactiveLics.forEach(item => {
+                    html += `
+                        <li style="margin: 10px 0; opacity: 0.6;">
+                            <strong>License:</strong> ${item.key.substring(0,12)}...${item.key.substring(item.key.length-4)}<br>
+                            <strong>Revoked:</strong> ${item.license.revoked_at ? new Date(item.license.revoked_at).toLocaleDateString() : 'N/A'}<br>
+                            <strong>Reason:</strong> ${item.license.revoke_reason || 'N/A'}
+                        </li>
+                    `;
+                });
+                html += '</ul></div>';
+            }
+
+            if (activeLics.length > 1) {
+                html += `
+                    <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                        <strong>⚠️ Warning:</strong> This machine has multiple active licenses. 
+                        Only one license per machine is allowed. Please revoke the extra licenses.
+                    </div>
+                `;
+            }
+
+            resultDiv.innerHTML = html;
+        }
+
+        function updateStats() {
+            const activeCount = Object.keys(activeLicenses).length;
+            const inactiveCount = Object.keys(inactiveLicenses).length;
+            const totalCount = activeCount + inactiveCount;
+            
+            // Count revoked today
+            const today = new Date().toDateString();
+            const revokedToday = Object.values(inactiveLicenses).filter(license => {
+                if (!license.revoked_at) return false;
+                return new Date(license.revoked_at).toDateString() === today;
+            }).length;
+
+            // Count machines with multiple active licenses
+            const duplicateMachineCount = Object.entries(machineIdMap).filter(([machineId, licenses]) => {
+                const activeLicenseCount = licenses.filter(l => l.status === 'active').length;
+                return activeLicenseCount > 1;
+            }).length;
+
+            document.getElementById('totalActive').textContent = activeCount;
+            document.getElementById('totalInactive').textContent = inactiveCount;
+            document.getElementById('totalLicenses').textContent = totalCount;
+            document.getElementById('revokedToday').textContent = revokedToday;
+            document.getElementById('duplicateMachines').textContent = duplicateMachineCount;
+        }
+
+        function showRevokeModal(licenseKey) {
+            currentRevokeKey = licenseKey;
+            document.getElementById('revokeKeyDisplay').textContent = 
+                licenseKey.substring(0, 8) + '...' + licenseKey.substring(licenseKey.length - 4);
+            document.getElementById('revokeModal').classList.add('show');
+        }
+
+        function closeRevokeModal() {
+            document.getElementById('revokeModal').classList.remove('show');
+            document.getElementById('revokeReason').value = '';
+            currentRevokeKey = '';
+        }
+
+        async function confirmRevoke() {
+            const reason = document.getElementById('revokeReason').value.trim();
+            if (!reason) {
+                alert('Please provide a reason for revocation');
+                return;
+            }
+
+            try {
+                const license = activeLicenses[currentRevokeKey];
+                const revokedLicense = {
+                    ...license,
+                    revoked_at: new Date().toISOString(),
+                    revoke_reason: reason,
+                    status: 'revoked'
+                };
+
+                // Move to inactive
+                await fetch(`${firebaseUrl}/licenses/inactive/${currentRevokeKey}.json?auth=${authToken}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(revokedLicense)
+                });
+
+                // Remove from active
+                await fetch(`${firebaseUrl}/licenses/active/${currentRevokeKey}.json?auth=${authToken}`, {
+                    method: 'DELETE'
+                });
+
+                alert('License revoked successfully!');
+                closeRevokeModal();
+                await loadLicenses();
+
+            } catch (error) {
+                alert('Error revoking license: ' + error.message);
+            }
+        }
+
+        function showReactivateModal(licenseKey) {
+            currentReactivateKey = licenseKey;
+            document.getElementById('reactivateKeyDisplay').textContent = 
+                licenseKey.substring(0, 8) + '...' + licenseKey.substring(licenseKey.length - 4);
+            document.getElementById('reactivateModal').classList.add('show');
+        }
+
+        function closeReactivateModal() {
+            document.getElementById('reactivateModal').classList.remove('show');
+            currentReactivateKey = '';
+        }
+
+        async function confirmReactivate() {
+            try {
+                const license = inactiveLicenses[currentReactivateKey];
+                
+                // Check if this would create a duplicate for the machine
+                const machineId = license.computer_id;
+                if (machineId && machineIdMap[machineId]) {
+                    const activeLicenses = machineIdMap[machineId].filter(l => l.status === 'active');
+                    if (activeLicenses.length > 0) {
+                        const proceed = confirm(
+                            `WARNING: This machine (${machineId}) already has ${activeLicenses.length} active license(s). ` +
+                            `Reactivating will create a duplicate. Do you want to proceed?`
+                        );
+                        if (!proceed) {
+                            closeReactivateModal();
+                            return;
+                        }
+                    }
+                }
+                
+                // Remove revocation fields
+                delete license.revoked_at;
+                delete license.revoke_reason;
+                license.status = 'active';
+
+                // Move to active
+                await fetch(`${firebaseUrl}/licenses/active/${currentReactivateKey}.json?auth=${authToken}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(license)
+                });
+
+                // Remove from inactive
+                await fetch(`${firebaseUrl}/licenses/inactive/${currentReactivateKey}.json?auth=${authToken}`, {
+                    method: 'DELETE'
+                });
+
+                alert('License reactivated successfully!');
+                closeReactivateModal();
+                await loadLicenses();
+
+            } catch (error) {
+                alert('Error reactivating license: ' + error.message);
+            }
+        }
+
+        function filterTable(tableId, searchId) {
+            const input = document.getElementById(searchId);
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById(tableId);
+            const tr = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < tr.length; i++) {
+                let found = false;
+                const td = tr[i].getElementsByTagName('td');
+                
+                for (let j = 0; j < td.length; j++) {
+                    if (td[j]) {
+                        const txtValue = td[j].textContent || td[j].innerText;
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                
+                tr[i].style.display = found ? '' : 'none';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: confirm-license-server
+    env: node
+    plan: free
+    rootDir: ./02_SERVER
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Firebase Service Account Variables (REQUIRED)
+      - key: type
+        value: service_account
+      - key: project_id
+        value: confirm-license-manager
+      - key: private_key_id
+        value: <PRIVATE_KEY_ID_PLACEHOLDER>
+      - key: private_key
+        value: "-----BEGIN PRIVATE KEY-----
+<REDACTED_PRIVATE_KEY>
+-----END PRIVATE KEY-----\n"
+      - key: client_email
+        value: firebase-adminsdk-fbsvc@confirm-license-manager.iam.gserviceaccount.com
+      - key: client_id
+        value: <CLIENT_ID_PLACEHOLDER>
+      - key: auth_uri
+        value: https://accounts.google.com/o/oauth2/auth
+      - key: token_uri
+        value: https://oauth2.googleapis.com/token
+      - key: auth_provider_x509_cert_url
+        value: https://www.googleapis.com/oauth2/v1/certs
+      - key: client_x509_cert_url
+        value: https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confirm-license-manager.iam.gserviceaccount.com
+      - key: universe_domain
+        value: googleapis.com
+      # Application Secrets (REQUIRED)
+      - key: SHARED_SECRET
+        value: <SET_IN_RENDER_DASHBOARD>
+      - key: LICENSE_SECRET
+        value: <SET_IN_RENDER_DASHBOARD>
+      # Optional Services (can be left empty)
+      - key: STRIPE_SECRET_KEY
+        value: your_stripe_secret_key_here
+      - key: SENDGRID_API_KEY
+        value: your_sendgrid_api_key_here
+    healthCheckPath: /health
+    autoDeploy: true

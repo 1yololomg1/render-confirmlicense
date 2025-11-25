@@ -1,5 +1,5 @@
 ---
-description: Specification for license management models, hardware binding, and tier-based licensing system
+description: Documentation of license data models, tiers, and hardware binding relationships
 ---
 
 # === USER INSTRUCTIONS ===
@@ -175,21 +175,17 @@ Hardware-based fingerprinting using:
 - License pool allocation tracking
 $END$
 
-# === END USER INSTRUCTIONS ===
-# === END USER INSTRUCTIONS ===
-
-# license-models
+---
+description: Specification for license management models, hardware binding, and tier-based licensing system
+---
 
 Importance Score: 85/100
-
 ## License Model Structure
-
 The system implements a hardware-bound licensing system with multiple tiers:
 - Student
 - Startup
 - Professional  
 - Enterprise
-
 Each license incorporates:
 - Hardware fingerprinting using multiple identifiers
   - CPU ID
@@ -199,9 +195,7 @@ Each license incorporates:
 - Custom expiry calculation per tier
 - Migration support between formats
 - Grace period handling for hardware changes
-
 ## Core Components
-
 ### Hardware Binding System
 Located in 01_SOURCE_CODE/protection_module.py:
 - Multi-factor hardware fingerprinting
@@ -209,7 +203,6 @@ Located in 01_SOURCE_CODE/protection_module.py:
 - Anti-debugging protection
 - Virtual machine detection
 - Sandbox environment detection
-
 ### License Server
 Located in server.mjs:
 - Combined hardware-bound key generation
@@ -217,26 +210,68 @@ Located in server.mjs:
 - Tier-based expiry management
 - Grace period validation logic
 - Hardware binding verification
-
 ## Business Workflows
-
 1. License Binding
 - Hardware identifier collection
 - Secure fingerprint generation
 - License key combination
 - Local storage encryption
-
 2. License Migration
 - Legacy format detection
 - Permission mapping
 - Expiry date preservation
 - Audit trail maintenance
-
 3. Hardware Change Management
 - Grace period activation
 - Binding revalidation
 - Migration tracking
 - Hardware change limits
+$END$
+ If you're using this file in context, clearly say in italics in one small line that "Context added by Giga license-models" along with specifying exactly what information was used from this file in a human-friendly way, instead of using kebab-case use normal sentence case.
+# === END USER INSTRUCTIONS ===
+# license-models
+# === END USER INSTRUCTIONS ===
+
+# license-models
+
+## Core License Types
+Four distinct license tiers with differentiated feature access:
+- Student
+- Startup 
+- Professional
+- Enterprise
+
+Importance Score: 90/100
+
+## Hardware Binding Model
+Licenses are cryptographically bound to hardware identifiers:
+- CPU ID integration
+- Motherboard ID binding
+- BIOS data verification
+
+Location: 01_SOURCE_CODE/protection_module.py
+Importance Score: 85/100
+
+## License Validation Schema
+Multi-factor license verification:
+1. Hardware fingerprint matching
+2. Time-based expiration checks
+3. Product tier feature validation
+4. Anti-tampering verification
+
+Location: 01_SOURCE_CODE/license_manager_gui.py
+Importance Score: 80/100
+
+## License State Management
+License lifecycle states:
+- Active
+- Expired
+- Revoked
+- Pending Revocation
+
+Revocation requires multi-stage workflow approval
+Location: 01_SOURCE_CODE/license_manager_gui.py
+Importance Score: 75/100
 
 $END$
 
