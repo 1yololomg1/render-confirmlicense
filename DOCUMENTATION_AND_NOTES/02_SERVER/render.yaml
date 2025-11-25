@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: confirm-license-server
+    env: node
+    plan: free
+    rootDir: ./02_SERVER
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Firebase Service Account Variables (REQUIRED)
+      - key: type
+        value: service_account
+      - key: project_id
+        value: confirm-license-manager
+      - key: private_key_id
+        value: 4123bb420e9e270aad04e60a4286f870b19e5bda
+      - key: private_key
+        value: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDJph5Pu26/PeZt\nGS7JMAAuzYgSBD3iEm4OUEWKWutk2MWp8+Q7zjaELdoRPtn4gM+ANwAWfnkiEXJF\nqaaeOzsCWGw2CcgbzFY2JhT8WSXvOErIfifW9Ty2ExewR04ybudxbEapFSiQBTfk\n0qDs+8OZgNLWXi3NBubNuH+/AZc2o8ipP6F5/LsAYCWBKqlEFuygV8REVIyGULCW\nARVnUYiNmMv72uwEqsBkEWEUQVJyPZUJZKVjCRxCCZz6uKJIsxXfKLuSZbsnI2D8\nqRU6UbhWgsWaZd0GcXbiULq5KcoRcKJoBc35BAXZ1ALZRzb5fgkN8ALqviFQnqnE\n+ik1UNMHAgMBAAECggEAASDk92YhkNWOameN6F//KVT1dnydqC0h5QJphxV1Pdp5\nHLdozXoUZOQ+RCUKiOiGTY7jX4mnUyiEb9TmqE9N8t7HNh7f9ciqdz9yC3ywokqX\nlzcNQlvwyawzWPiR/LHND/u8kzsRDJ0E/wZ3rAVzNb+tlMjwnDYpYE59UmWQDILs\nLb4qZFS8cE089ACKbWgN/uQKdrKPufqltP9de6M6+WVam9cauO9tbmLY7+C6DbsN\nIXT2e6cAaFtEjbctp1/rdffgRy1UIVm7MJUoCG1hy0vaq1RLJPIxV4UmRP60gn3Y\nzgVrJ5IaB1krLID0sF7F28A/ahEntFiWkQ9PksJRqQKBgQD/EJsKt4me2okBMb3m\nqQC4K76mN8uEsHmrZPw4e7bKJInWHwbJBhaXU2IwqNnphdxdx8dznA3u3LV3djEJ\nJSbc+r8h/604g8jwpJAptF24Khv7ycwXvj2AjE2XJLaAM68PGwe/cWEsdtST6Dxs\nrNL1BWE6z0IgLt/JlBkB8Pc8+QKBgQDKY2Dn8DflGLAV+S4/AGC5w2wg9ChpbsnE\npHx3Pooxcb2MTp2IhkevF+N5zq8AdrfdEfIcteoUyTSFP0o4OHuP3s2FG69uaTDh\nVtrzZhFZEO/OCaEYPt7cu+bas6sT+8zQyvasy5TL80w4YL8iELzJioT8y6Ha/1b7\nhMs2ntyP/wKBgQCCYB+P887xluzu4lkaPQq0GRAjcGOkGHyooj7WNE5ztweJnmRe\nfrEvepy3GKgCWL0SZprJulvY25IaVRytewMJc1Ydb85AFASzFLrnxl0dVNDm+/hJ\nrqFLQuwqNMbgcwqpYvyr2617B+aTD+NK/W/7dFuFrwky4CLdq8i4mE4YKQKBgB+e\nnSI/fowValVUg+wl4/bB2F/hpXqra2yEgkmjBLYq3gFQuv38dLCfW9PI/cBly94H\nErt3lGXA9aqns7HK6UsV9SgJpkPqvU9HYZfLZ4Rxx/V5vahrEiiMVsnubhkGKv6n\n5xgiClI+5badLt9knAok0RgpvFTZtb5ABfu3oCADAoGARdkdZKACCSxhS5mSY4Q5\nwskGJ6eWVrwi12KCndrOG93N7Je3zCX6s1nWpfvR/nJ7cd+SzQcj7o5Wt6+ve5bh\nuHrTuxVQEooWh9URemt6f47Ripdyi6BQlhjtQDbv/ftfEIV7zPXs2I+6DuLU694D\nmtnaob8NzKh0ATCOkSvIbrc=\n-----END PRIVATE KEY-----\n"
+      - key: client_email
+        value: firebase-adminsdk-fbsvc@confirm-license-manager.iam.gserviceaccount.com
+      - key: client_id
+        value: 117839336252058777646
+      - key: auth_uri
+        value: https://accounts.google.com/o/oauth2/auth
+      - key: token_uri
+        value: https://oauth2.googleapis.com/token
+      - key: auth_provider_x509_cert_url
+        value: https://www.googleapis.com/oauth2/v1/certs
+      - key: client_x509_cert_url
+        value: https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confirm-license-manager.iam.gserviceaccount.com
+      - key: universe_domain
+        value: googleapis.com
+      # Application Secrets (REQUIRED)
+      - key: SHARED_SECRET
+        value: confirm-admin-secret-2024
+      - key: LICENSE_SECRET
+        value: tynaeKXDf7B6GkuPxffFSeu^NJEy1byV
+      # Optional Services (can be left empty)
+      - key: STRIPE_SECRET_KEY
+        value: your_stripe_secret_key_here
+      - key: SENDGRID_API_KEY
+        value: your_sendgrid_api_key_here
+    healthCheckPath: /health
+    autoDeploy: true
