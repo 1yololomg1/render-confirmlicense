@@ -15,6 +15,7 @@
  * prohibited and may result in severe civil and criminal penalties.
  */
 
+import 'dotenv/config';
 import express from "express";
 import crypto from "crypto";
 import admin from "firebase-admin";

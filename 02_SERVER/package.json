@@ -5,11 +5,7 @@
   "main": "server.mjs",
   "type": "module",
   "copyright": "Copyright (c) 2024 TraceSeis, Inc. All rights reserved.",
-  "author": {
-    "name": "Alvaro Chaveste (deltaV solutions)",
-    "email": "alvarochf@traceseis.com",
-    "company": "TraceSeis, Inc."
-  },
+  "author": "deltaV solutions",
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
@@ -17,10 +13,11 @@
     "test": "echo 'No tests specified'"
   },
   "dependencies": {
+    "@sendgrid/mail": "^8.1.0",
+    "dotenv": "^17.2.3",
     "express": "^4.18.2",
     "firebase-admin": "^12.0.0",
-    "stripe": "^14.0.0",
-    "@sendgrid/mail": "^8.1.0"
+    "stripe": "^14.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -31,6 +28,5 @@
     "stripe",
     "firebase"
   ],
-  "author": "deltaV solutions",
   "license": "MIT"
 }
