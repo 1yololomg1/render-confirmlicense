@@ -518,6 +518,7 @@ app.get('/admin', (req, res) => {
       
       <div class="tabs">
         <div class="tab active" data-tab="create">Create License</div>
+        <div class="tab" data-tab="all">All Licenses</div>
         <div class="tab" data-tab="search">Search Licenses</div>
         <div class="tab" data-tab="migrate">Migrate Old Licenses</div>
         <div class="tab" data-tab="reports">Reports & Stats</div>
@@ -585,6 +586,59 @@ app.get('/admin', (req, res) => {
         </div>
       </div>
       
+      <!-- All Licenses Tab -->
+      <div id="all-tab" class="tab-content">
+        <div class="container">
+          <h2>All Licenses (Newest First)</h2>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <button id="loadAllLicensesBtn" class="btn-primary">Load All Licenses</button>
+            <div id="licenseCount"></div>
+          </div>
+          
+          <div id="allLicensesResults">
+            <p>Click "Load All Licenses" to view all licenses sorted by creation date (newest first).</p>
+          </div>
+          
+          <div id="allLicenseDetails" class="hidden">
+            <h3>License Details</h3>
+            <div id="allLicenseData"></div>
+            
+            <div class="form-group" style="margin-top: 20px;">
+              <h4>Update License</h4>
+              
+              <div class="flex-row">
+                <div class="form-group">
+                  <label for="allUpdateStatus">Status:</label>
+                  <select id="allUpdateStatus">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="revoked">Revoked</option>
+                  </select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="allExtendDays">Extend (days):</label>
+                  <input type="number" id="allExtendDays" value="0">
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="allUpdateNotes">Update Notes:</label>
+                <textarea id="allUpdateNotes" rows="2"></textarea>
+              </div>
+              
+              <div class="actions">
+                <button id="allUpdateLicenseBtn" class="btn-primary">Update License</button>
+                <button id="allUnbindMachineBtn" class="btn-warning">Unbind Machine</button>
+                <button id="allRevokeLicenseBtn" class="btn-danger">Revoke License</button>
+                <button id="allDeleteLicenseBtn" class="btn-danger" style="background: #c0392b;">🗑️ Delete Permanently</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <!-- Search Licenses Tab -->
       <div id="search-tab" class="tab-content">
         <div class="container">
@@ -638,6 +692,7 @@ app.get('/admin', (req, res) => {
                 <button id="updateLicenseBtn" class="btn-primary">Update License</button>
                 <button id="unbindMachineBtn" class="btn-warning">Unbind Machine</button>
                 <button id="revokeLicenseBtn" class="btn-danger">Revoke License</button>
+                <button id="deleteLicenseBtn" class="btn-danger" style="background: #c0392b;">🗑️ Delete Permanently</button>
               </div>
             </div>
           </div>
@@ -937,6 +992,47 @@ app.get('/admin', (req, res) => {
           updateLicense(licenseId, { status: 'revoked', notes: 'License revoked by admin' });
         });
         
+        // Delete license button (Search tab)
+        document.getElementById('deleteLicenseBtn').addEventListener('click', function() {
+          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\n\nThis will permanently delete this license from Firebase.\nThis action CANNOT be undone.')) {
+            return;
+          }
+          
+          if (!confirm('Final confirmation: Delete this license forever?')) {
+            return;
+          }
+          
+          const licenseId = document.getElementById('licenseDetails').dataset.licenseId;
+          deleteLicense(licenseId);
+        });
+        
+        function deleteLicense(licenseId) {
+          fetch('/admin/delete-license', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-app-secret': '` + sharedSecret + `'
+            },
+            body: JSON.stringify({ licenseId })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(\`Server returned \${response.status}: \${response.statusText}\`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            alert('License permanently deleted!');
+            // Clear the details panel
+            document.getElementById('licenseDetails').classList.add('hidden');
+            // Re-run search to refresh
+            searchLicenses();
+          })
+          .catch(error => {
+            alert('Error deleting license: ' + error.message);
+          });
+        }
+        
         function updateLicense(licenseId, updates) {
           fetch('/admin/update-license', {
             method: 'POST',
@@ -1164,6 +1260,205 @@ app.get('/admin', (req, res) => {
         
         // Load statistics when the reports tab is clicked
         document.querySelector('.tab[data-tab="reports"]').addEventListener('click', loadStatistics);
+        
+        // ALL LICENSES TAB FUNCTIONALITY
+        document.getElementById('loadAllLicensesBtn').addEventListener('click', loadAllLicenses);
+        
+        function loadAllLicenses() {
+          document.getElementById('allLicensesResults').innerHTML = '<p>Loading all licenses...</p>';
+          document.getElementById('allLicenseDetails').classList.add('hidden');
+          
+          fetch('/admin/all-licenses', {
+            method: 'GET',
+            headers: {
+              'x-app-secret': '` + sharedSecret + `'
+            }
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(\`Server returned \${response.status}: \${response.statusText}\`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            document.getElementById('licenseCount').textContent = \`Total: \${data.total} licenses\`;
+            
+            if (!data.licenses || data.licenses.length === 0) {
+              document.getElementById('allLicensesResults').innerHTML = '<p>No licenses found.</p>';
+              return;
+            }
+            
+            let html = \`
+              <table>
+                <thead>
+                  <tr>
+                    <th>Created</th>
+                    <th>License ID</th>
+                    <th>Email</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Expires</th>
+                    <th>Machine</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+            \`;
+            
+            data.licenses.forEach(license => {
+              const statusClass = license.status === 'active' ? 'badge-active' : 
+                                 license.status === 'revoked' ? 'badge-inactive' :
+                                 license.status === 'migrated' ? 'badge-migrated' : 'badge-inactive';
+                                 
+              const expiryDate = new Date(license.expires);
+              const isExpired = expiryDate < new Date();
+              
+              const createdDate = license.created_at ? new Date(license.created_at).toLocaleDateString() : 'Unknown';
+              const machineId = license.computer_id ? license.computer_id.substring(0, 8) + '...' : 'Unbound';
+              
+              html += \`
+                <tr data-id="\${license.id}">
+                  <td>\${createdDate}</td>
+                  <td>\${license.id.substring(0, 8)}...</td>
+                  <td>\${license.email || 'N/A'}</td>
+                  <td>\${license.tier || 'standard'}</td>
+                  <td><span class="badge \${statusClass}">\${license.status || 'inactive'}</span></td>
+                  <td>\${new Date(license.expires).toLocaleDateString()} \${isExpired ? '(expired)' : ''}</td>
+                  <td>\${machineId}</td>
+                  <td>
+                    <button class="view-all-license" data-id="\${license.id}">View</button>
+                  </td>
+                </tr>
+              \`;
+            });
+            
+            html += \`
+                </tbody>
+              </table>
+            \`;
+            
+            document.getElementById('allLicensesResults').innerHTML = html;
+            
+            // Add event listeners to view buttons
+            document.querySelectorAll('.view-all-license').forEach(button => {
+              button.addEventListener('click', function() {
+                const licenseId = this.dataset.id;
+                const license = data.licenses.find(l => l.id === licenseId);
+                showAllLicenseDetails(license);
+              });
+            });
+          })
+          .catch(error => {
+            document.getElementById('allLicensesResults').innerHTML = \`
+              <div class="error" style="display: block; padding: 15px;">
+                <p>Error loading licenses: \${error.message}</p>
+              </div>
+            \`;
+          });
+        }
+        
+        function showAllLicenseDetails(license) {
+          const detailsDiv = document.getElementById('allLicenseDetails');
+          detailsDiv.classList.remove('hidden');
+          detailsDiv.dataset.licenseId = license.id;
+          
+          document.getElementById('allUpdateStatus').value = license.status || 'inactive';
+          document.getElementById('allUpdateNotes').value = '';
+          
+          let html = '<div class="json-viewer"><pre>' + JSON.stringify(license, null, 2) + '</pre></div>';
+          document.getElementById('allLicenseData').innerHTML = html;
+          
+          detailsDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // All Licenses tab - Update button
+        document.getElementById('allUpdateLicenseBtn').addEventListener('click', function() {
+          const licenseId = document.getElementById('allLicenseDetails').dataset.licenseId;
+          const status = document.getElementById('allUpdateStatus').value;
+          const extendDays = parseInt(document.getElementById('allExtendDays').value) || 0;
+          const notes = document.getElementById('allUpdateNotes').value;
+          
+          updateLicenseFromAllTab(licenseId, { status, extendDays, notes });
+        });
+        
+        document.getElementById('allUnbindMachineBtn').addEventListener('click', function() {
+          const licenseId = document.getElementById('allLicenseDetails').dataset.licenseId;
+          updateLicenseFromAllTab(licenseId, { unbindMachine: true });
+        });
+        
+        document.getElementById('allRevokeLicenseBtn').addEventListener('click', function() {
+          if (!confirm('Are you sure you want to revoke this license?')) {
+            return;
+          }
+          
+          const licenseId = document.getElementById('allLicenseDetails').dataset.licenseId;
+          updateLicenseFromAllTab(licenseId, { status: 'revoked', notes: 'License revoked by admin' });
+        });
+        
+        document.getElementById('allDeleteLicenseBtn').addEventListener('click', function() {
+          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\n\nThis will permanently delete this license from Firebase.\nThis action CANNOT be undone.')) {
+            return;
+          }
+          
+          if (!confirm('Final confirmation: Delete this license forever?')) {
+            return;
+          }
+          
+          const licenseId = document.getElementById('allLicenseDetails').dataset.licenseId;
+          deleteLicenseFromAllTab(licenseId);
+        });
+        
+        function updateLicenseFromAllTab(licenseId, updates) {
+          fetch('/admin/update-license', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-app-secret': '` + sharedSecret + `'
+            },
+            body: JSON.stringify({
+              licenseId,
+              ...updates
+            })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(\`Server returned \${response.status}: \${response.statusText}\`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            alert('License updated successfully!');
+            loadAllLicenses(); // Refresh the list
+          })
+          .catch(error => {
+            alert('Error updating license: ' + error.message);
+          });
+        }
+        
+        function deleteLicenseFromAllTab(licenseId) {
+          fetch('/admin/delete-license', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-app-secret': '` + sharedSecret + `'
+            },
+            body: JSON.stringify({ licenseId })
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(\`Server returned \${response.status}: \${response.statusText}\`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            alert('License permanently deleted!');
+            document.getElementById('allLicenseDetails').classList.add('hidden');
+            loadAllLicenses(); // Refresh the list
+          })
+          .catch(error => {
+            alert('Error deleting license: ' + error.message);
+          });
+        }
       </script>
     </body>
     </html>
