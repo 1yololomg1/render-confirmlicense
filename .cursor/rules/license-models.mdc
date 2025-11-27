@@ -92,47 +92,7 @@ Core License Model Structure:
 - Secure key storage format
 Key Implementation Files:
 - 01_SOURCE_CODE/protection_module.py: Hardware binding and protection logic
-- original_server.mjs: License key generation and validation
-<<<<<<< HEAD
-=======
-$END$
-
-# license-models
-Importance Score: 90/100
-## License Types and Tiers
-- Student
-- Professional
-- Enterprise
-Each tier implements specific access control and feature restrictions
-## Hardware Binding Model
-Composite hardware fingerprint using:
-- CPU ID
-- Motherboard Serial Number
-- BIOS Identifier
-- MAC Address
-## License Key Format
-Structured key composition:
-`{license_id}:{expiry_date}:{signature}`
-## Binding Rules
-1. Single machine activation enforcement
-2. Automatic hardware binding on first activation
-3. 72-hour offline grace period allowance
-4. Migration support for legacy license formats
-## License Validation Workflow
-1. Hardware fingerprint verification
-2. Expiration checks
-3. Grace period management
-4. License tier validation
-5. Secure cached state verification
-## Storage Model
-- Encrypted local storage for license cache
-- Hardware-bound state persistence
-- Secure validation tokens
-Implementation Locations:
-- 01_SOURCE_CODE/license_manager_gui.py: Core license model implementations
-- server.mjs: Server-side license validation and management
-- 01_SOURCE_CODE/protection_module.py: Hardware binding protection
->>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
+- DOCUMENTATION_AND_NOTES/02_SERVER/server.mjs: License key generation and validation
 $END$
 
 ---
