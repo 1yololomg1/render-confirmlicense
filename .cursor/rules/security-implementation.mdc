@@ -90,11 +90,9 @@ Implemented in `original_server.mjs`:
 $END$
 
 ---
-description: For analyzing software security, anti-tampering, and license protection mechanisms in commercial applications
 description: Technical specifications for security implementation and anti-tampering mechanisms in software licensing systems
 ---
 # security-implementation
-<<<<<<< HEAD
 ## Core Protection Layer (Importance: 95/100)
 The protection system implements a multi-layered security approach:
 1. Hardware Fingerprinting
@@ -137,9 +135,9 @@ Protected endpoints handle:
 - Tier access management
 - Migration validation
 - Security audit logging
-=======
+## Multi-Layer Security Architecture
 Importance Score: 85/100
-Multi-layer security architecture implementing three core protection mechanisms:
+Three core protection mechanisms:
 1. Hardware-Based License Binding
 - Composite hardware fingerprinting using:
   - CPU ID validation
@@ -162,7 +160,7 @@ Location: 01_SOURCE_CODE/protection_module.py
   - Expiration checks
   - Grace period management (72h offline tolerance)
 - Encrypted local license cache storage
-Location: server.mjs
+Location: DOCUMENTATION_AND_NOTES/02_SERVER/server.mjs
 Core Security Features:
 - Single machine activation enforcement
 - Automatic hardware fingerprint locking
@@ -171,7 +169,6 @@ Core Security Features:
 - Anti-reverse engineering protections
 - Encrypted storage for license data
 - Migration path security for legacy systems
->>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
 
 ---

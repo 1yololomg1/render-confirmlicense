@@ -98,11 +98,6 @@ Key transitions:
 - Hardware migration
 - Tier upgrade/downgrade
 - Revocation
-<<<<<<< HEAD
-=======
-$END$
-
-# license-workflow
 ## License State Machine (Importance: 95/100)
 Core workflow states and transitions:
 1. Creation & Initial Binding
@@ -143,7 +138,6 @@ Binding Implementation:
 - Cached in encrypted local storage
 - Verified during runtime validation
 - Used for transfer/migration decisions
->>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
 
 ---
