@@ -85,11 +85,6 @@ Location: original_server.mjs
 - Hardware-bound license enforcement
 - Protection measure coordination
 - Anti-tampering response handlers
-<<<<<<< HEAD
-=======
-$END$
-
-# protection-algorithms
 ## Core Protection Systems
 Importance Score: 90/100
 Hardware Fingerprinting Algorithm:
@@ -119,7 +114,6 @@ License Validation Security:
 - License migration validation between versions
 - Tiered access control enforcement
 - Revocation mechanism support
->>>>>>> 7bbc195 (Refactor documentation for license management and protection systems)
 $END$
 
 ---
