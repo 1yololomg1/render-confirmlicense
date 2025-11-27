@@ -996,10 +996,10 @@ app.get('/admin', (req, res) => {
         
         // Delete license button (Search tab)
         document.getElementById('deleteLicenseBtn').addEventListener('click', function() {
-          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\n\nThis will permanently delete this license from Firebase.\nThis action CANNOT be undone.')) {
+          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\\n\\nThis will permanently delete this license from Firebase.\\nThis action CANNOT be undone.')) {
             return;
           }
-          
+
           if (!confirm('Final confirmation: Delete this license forever?')) {
             return;
           }
@@ -1398,10 +1398,10 @@ app.get('/admin', (req, res) => {
         });
         
         document.getElementById('allDeleteLicenseBtn').addEventListener('click', function() {
-          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\n\nThis will permanently delete this license from Firebase.\nThis action CANNOT be undone.')) {
+          if (!confirm('⚠️ PERMANENT DELETE - Are you ABSOLUTELY SURE?\\n\\nThis will permanently delete this license from Firebase.\\nThis action CANNOT be undone.')) {
             return;
           }
-          
+
           if (!confirm('Final confirmation: Delete this license forever?')) {
             return;
           }
