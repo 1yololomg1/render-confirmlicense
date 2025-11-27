@@ -769,16 +769,18 @@ app.get('/admin', (req, res) => {
       </div>
       
       <script>
-        // Tab functionality
-        document.querySelectorAll('.tab').forEach(tab => {
-          tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+        // Wait for DOM to be fully loaded before attaching event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+          // Tab functionality
+          document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+              document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+              document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+              tab.classList.add('active');
+              document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+            });
           });
-        });
         
         // Copy functionality
         document.getElementById('copyLicense').addEventListener('click', function() {
@@ -1459,6 +1461,8 @@ app.get('/admin', (req, res) => {
             alert('Error deleting license: ' + error.message);
           });
         }
+
+        }); // End DOMContentLoaded
       </script>
     </body>
     </html>
