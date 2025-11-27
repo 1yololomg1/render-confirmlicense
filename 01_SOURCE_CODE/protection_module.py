@@ -55,9 +55,18 @@ class CommercialProtection:
                 'procmon.exe', 'wireshark.exe', 'fiddler.exe', 'charles.exe'
             ]
             
+            # Optimized: Use a set for faster lookups and limit iterations
+            debugger_set = set(debugger_processes)
+            checked_count = 0
+            max_checks = 500  # Limit to prevent hanging on systems with many processes
+            
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break  # Prevent excessive scanning
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in debugger_processes:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in debugger_set:
                         self._terminate_application("Debugging software detected")
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -186,13 +195,20 @@ class CommercialProtection:
         """Detect API hooking attempts"""
         try:
             # Check for suspicious DLLs
-            suspicious_dlls = [
+            suspicious_dlls = set([
                 'detours.dll', 'easyhook.dll', 'minhook.dll', 'polyhook.dll'
-            ]
+            ])
+            
+            checked_count = 0
+            max_checks = 200  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in suspicious_dlls:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in suspicious_dlls:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -229,15 +245,21 @@ class CommercialProtection:
         """Detect virtual machine environment"""
         try:
             # Check for VM-specific processes
-            vm_processes = [
+            vm_processes = set([
                 'vmtoolsd.exe', 'vmwaretray.exe', 'vmwareuser.exe',
-                'vboxservice.exe', 'vboxtray.exe', 'vmtoolsd.exe',
-                'qemu-ga.exe', 'xenservice.exe'
-            ]
+                'vboxservice.exe', 'vboxtray.exe', 'qemu-ga.exe', 'xenservice.exe'
+            ])
+            
+            checked_count = 0
+            max_checks = 200  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in vm_processes:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in vm_processes:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -253,28 +275,29 @@ class CommercialProtection:
     def _detect_sandbox(self):
         """Detect sandbox environment"""
         try:
-            # Check for sandbox-specific processes
-            sandbox_processes = [
+            # Check for sandbox-specific processes and analysis tools
+            sandbox_processes = set([
                 'sandboxie.exe', 'cuckoo.exe', 'wireshark.exe',
                 'procmon.exe', 'regmon.exe', 'filemon.exe'
-            ]
+            ])
             
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
-                    if proc.info['name'].lower() in sandbox_processes:
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            
-            # Check for analysis tools
-            analysis_tools = [
+            analysis_tools = set([
                 'ida.exe', 'ida64.exe', 'ghidra.exe', 'radare2.exe',
                 'x64dbg.exe', 'ollydbg.exe', 'windbg.exe'
-            ]
+            ])
+            
+            # Combined check to avoid iterating twice
+            all_suspicious = sandbox_processes | analysis_tools
+            checked_count = 0
+            max_checks = 300  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in analysis_tools:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in all_suspicious:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
