@@ -96,8 +96,36 @@ class CommercialProtection:
             pass
     
     def _is_valid_execution_path(self, path):
-        """Validate execution path"""
-        # Add your expected installation paths here
+        """Validate execution path - lenient for development, strict for production"""
+        # If running from Python source (not frozen), allow any path (development mode)
+        if not getattr(sys, 'frozen', False):
+            return True
+        
+        # For compiled .exe, check if in standard installation locations
+        expected_locations = [
+            r"C:\Program Files",
+            r"C:\Program Files (x86)",
+            os.path.expanduser(r"~\AppData\Local\Programs"),
+        ]
+        
+        # Check if running from expected install location
+        for location in expected_locations:
+            if path.lower().startswith(location.lower()):
+                return True
+        
+        # Also allow running from Desktop or Downloads (users might run from there)
+        allowed_user_paths = [
+            os.path.expanduser(r"~\Desktop"),
+            os.path.expanduser(r"~\Downloads"),
+        ]
+        
+        for user_path in allowed_user_paths:
+            if path.lower().startswith(user_path.lower()):
+                return True
+        
+        # If we get here, it's an unexpected location for a compiled .exe
+        # But for development, we already returned True above
+        return False
         valid_paths = [
             "C:\\Program Files",
             "C:\\Program Files (x86)",

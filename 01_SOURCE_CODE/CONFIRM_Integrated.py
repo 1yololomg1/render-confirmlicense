@@ -58,18 +58,29 @@ import weakref
 import gc
 
 # Import commercial protection module
+# Enable protection only when appropriate (compiled builds or explicit dev testing)
 PROTECTION_AVAILABLE = False
 PROTECTION_ERROR = None
-try:
-    from protection_module import initialize_protection, cleanup_protection
-    PROTECTION_AVAILABLE = True
-except ImportError as e:
-    PROTECTION_ERROR = str(e)
+
+# Check execution mode
+is_compiled = getattr(sys, 'frozen', False)
+force_protection = os.getenv("CONFIRM_FORCE_PROTECTION") == "true"
+
+if is_compiled or force_protection:
+    # Running as compiled .exe OR developer explicitly enabled protection for testing
+    try:
+        from protection_module import initialize_protection, cleanup_protection
+        PROTECTION_AVAILABLE = True
+    except ImportError as e:
+        PROTECTION_ERROR = str(e)
+        PROTECTION_AVAILABLE = False
+    except Exception as e:
+        PROTECTION_ERROR = f"Unexpected error importing protection_module: {str(e)}"
+        PROTECTION_AVAILABLE = False
+else:
+    # Normal development mode - skip protection
     PROTECTION_AVAILABLE = False
-    # Log error will be done after logger is initialized
-except Exception as e:
-    PROTECTION_ERROR = f"Unexpected error importing protection_module: {str(e)}"
-    PROTECTION_AVAILABLE = False
+    PROTECTION_ERROR = "Protection disabled in development mode (set CONFIRM_FORCE_PROTECTION=true to test)"
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
@@ -367,10 +378,9 @@ def get_computer_fingerprint():
         # Primary method: MAC address + system info
         mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
                                for elements in range(0,2*6,2)][::-1])
-        system_info = platform.system() + platform.release()
         processor = platform.processor() or "unknown"
         
-        computer_data = f"{mac_address}_{system_info}_{processor}"
+        computer_data = f"{mac_address}_{processor}"
         fingerprint = hashlib.md5(computer_data.encode()).hexdigest()[:12]
         
         logger.debug(f"Generated fingerprint: {fingerprint}")
@@ -2376,7 +2386,7 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax1.fill(angles, acc_values, alpha=0.15, color='blue')
                 
                 ax1.set_xticks(angles[:-1])
-                ax1.set_xticklabels([str(name)[:8] for name in top_sheets], fontsize=8)
+                ax1.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
                 ax1.set_ylim(0, 1)
                 ax1.set_title('Sheet Classification Accuracy Comparison', fontsize=12, fontweight='bold', pad=20)
                 ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
@@ -2389,7 +2399,7 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax2.fill(angles, cramers_values, alpha=0.15, color='red')
                 
                 ax2.set_xticks(angles[:-1])
-                ax2.set_xticklabels([str(name)[:8] for name in top_sheets], fontsize=8)
+                ax2.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
                 ax2.set_ylim(0, 1)
                 ax2.set_title('Association Strength (Cramer\'s V) Comparison', fontsize=12, fontweight='bold', pad=20)
                 ax2.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
@@ -2402,7 +2412,7 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax3.fill(angles, util_values, alpha=0.15, color='green')
                 
                 ax3.set_xticks(angles[:-1])
-                ax3.set_xticklabels([str(name)[:8] for name in top_sheets], fontsize=8)
+                ax3.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
                 ax3.set_ylim(0, 1)
                 ax3.set_title('Neuron Utilization Comparison', fontsize=12, fontweight='bold', pad=20)
                 ax3.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
@@ -2423,7 +2433,7 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax4.fill(angles, composite_scores, alpha=0.15, color='purple')
                 
                 ax4.set_xticks(angles[:-1])
-                ax4.set_xticklabels([str(name)[:8] for name in top_sheets], fontsize=8)
+                ax4.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
                 ax4.set_ylim(0, 1)
                 ax4.set_title('Overall Performance Score', fontsize=12, fontweight='bold', pad=20)
                 ax4.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
@@ -2781,27 +2791,30 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         
         try:
             if hasattr(self.analyzer, 'confusion_matrix') and self.analyzer.confusion_matrix is not None:
-                fig = Figure(figsize=(15, 8), dpi=100, facecolor='white')
+                fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
                 
-                # Actual distribution
-                ax1 = fig.add_subplot(1, 2, 1)
+                # Combined Actual vs Predicted distribution in one chart
+                ax = fig.add_subplot(1, 1, 1)
                 actual_counts = self.analyzer.confusion_matrix.sum(axis=0)
-                ax1.bar(range(len(actual_counts)), actual_counts.values, color='skyblue', edgecolor='navy')
-                ax1.set_title('Actual Type Distribution', fontsize=14, fontweight='bold')
-                ax1.set_ylabel('Count')
-                ax1.set_xticks(range(len(actual_counts)))
-                ax1.set_xticklabels(actual_counts.index, rotation=45, ha='right')
-                ax1.grid(True, alpha=0.3)
-                
-                # Predicted distribution
-                ax2 = fig.add_subplot(1, 2, 2)
                 predicted_counts = self.analyzer.confusion_matrix.sum(axis=1)
-                ax2.bar(range(len(predicted_counts)), predicted_counts.values, color='lightcoral', edgecolor='darkred')
-                ax2.set_title('Predicted Type Distribution', fontsize=14, fontweight='bold')
-                ax2.set_ylabel('Count')
-                ax2.set_xticks(range(len(predicted_counts)))
-                ax2.set_xticklabels(predicted_counts.index, rotation=45, ha='right')
-                ax2.grid(True, alpha=0.3)
+                
+                # Set up bar positions
+                x = np.arange(len(actual_counts))
+                width = 0.35
+                
+                # Create side-by-side bars
+                ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
+                       color='skyblue', edgecolor='navy')
+                ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
+                       color='lightcoral', edgecolor='darkred')
+                
+                ax.set_title('Actual vs Predicted Type Distribution', fontsize=14, fontweight='bold')
+                ax.set_ylabel('Count')
+                ax.set_xlabel('Type')
+                ax.set_xticks(x)
+                ax.set_xticklabels(actual_counts.index, rotation=45, ha='right')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
                 
                 fig.tight_layout()
                 
@@ -4214,6 +4227,14 @@ class StatisticalAnalyzer:
         self.show_processing_overlay(f"Starting analysis of {len(selected_sheets)} sheet(s)...")
         self.root.update()  # Force update to show overlay
         
+        # Capture format selection before worker thread starts (thread-safe)
+        selected_input_format = "Contingency Table"  # Default
+        try:
+            if hasattr(self, 'input_format_var'):
+                selected_input_format = self.input_format_var.get()
+        except Exception as e:
+            logger.warning(f"Could not read input format, using default: {e}")
+        
         def batch_worker():
             try:
                 # Clear previous batch results
@@ -4239,8 +4260,8 @@ class StatisticalAnalyzer:
                                   self.show_processing_overlay(f"Analyzing sheet {idx}/{total}: {name}"))
                     
                     try:
-                        # Process single sheet
-                        sheet_results = self.process_single_sheet_for_batch(sheet_name)
+                        # Process single sheet with format parameter
+                        sheet_results = self.process_single_sheet_for_batch(sheet_name, input_format=selected_input_format)
                         
                         if sheet_results and isinstance(sheet_results, dict):
                             with self.data_lock:
@@ -4330,6 +4351,14 @@ class StatisticalAnalyzer:
         self.show_processing_overlay(f"Starting analysis of {len(selected_sheets)} sheet(s)...")
         self.root.update()  # Force update to show overlay
         
+        # Capture format selection before worker thread starts (thread-safe)
+        selected_input_format = "Contingency Table"  # Default
+        try:
+            if hasattr(self, 'input_format_var'):
+                selected_input_format = self.input_format_var.get()
+        except Exception as e:
+            logger.warning(f"Could not read input format, using default: {e}")
+        
         def batch_worker():
             try:
                 # Clear previous batch results
@@ -4355,8 +4384,8 @@ class StatisticalAnalyzer:
                                   self.show_processing_overlay(f"Analyzing sheet {idx}/{total}: {name}"))
                     
                     try:
-                        # Process single sheet
-                        sheet_results = self.process_single_sheet_for_batch(sheet_name)
+                        # Process single sheet with format parameter
+                        sheet_results = self.process_single_sheet_for_batch(sheet_name, input_format=selected_input_format)
                         
                         if sheet_results and isinstance(sheet_results, dict):
                             with self.data_lock:
@@ -4643,7 +4672,7 @@ class StatisticalAnalyzer:
                     
                     # Create summary report
                     summary_path = os.path.join(chart_dir, "export_summary.txt")
-                    with open(summary_path, 'w') as f:
+                    with open(summary_path, 'w', encoding='utf-8') as f:
                         f.write(f"Statistical Analysis Charts Export Summary\n")
                         f.write(f"{'='*50}\n")
                         f.write(f"Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -5321,6 +5350,22 @@ class StatisticalAnalyzer:
         self.sheet_combo = ttk.Combobox(sheet_row, textvariable=self.sheet_var, width=30, 
                                        state="readonly", font=('Arial', 10))
         self.sheet_combo.pack(side=tk.LEFT, padx=(10, 5))
+        
+        # Input format selection row
+        format_row = ttk.Frame(file_frame)
+        format_row.pack(fill=tk.X, pady=(10, 0))
+        
+        ttk.Label(format_row, text="Input Format:", font=('Arial', 12, 'bold')).pack(side=tk.LEFT)
+        
+        self.input_format_var = tk.StringVar(value="Contingency Table")
+        format_combo = ttk.Combobox(format_row, textvariable=self.input_format_var, 
+                                    values=["Contingency Table", "Confusion Matrix"],
+                                    state="readonly", width=30, font=('Arial', 10))
+        format_combo.pack(side=tk.LEFT, padx=(10, 5))
+        
+        # Help button for format explanation
+        format_help_btn = ttk.Button(format_row, text="?", command=self.show_format_help, width=3)
+        format_help_btn.pack(side=tk.LEFT, padx=(5, 0))
         
         # Analysis buttons row - moved to top
         analysis_buttons_row = ttk.Frame(file_frame)
@@ -6101,9 +6146,18 @@ For support and inquiries: info@traceseis.com"""
 
 1. LOADING DATA
    - Click "Browse" to select an Excel file (.xlsx or .xls)
-   - Choose the worksheet containing your analysis unit data
-   - Data format: First column = Unit IDs, Other columns = Category types
-   - Click "Analyze" to process the data
+   - Choose the worksheet containing your analysis data
+   - SELECT INPUT FORMAT: Choose "Confusion Matrix" or "Contingency Table" from the dropdown
+   - Click "Single Sheet" or "Multi-Sheet Analysis" to process the data
+   
+   INPUT FORMAT SELECTION:
+   • Confusion Matrix: Square matrix with "Predicted" as first column header
+     - Rows = Predicted classes, Columns = Actual classes
+     - Use for ML model validation results
+   • Contingency Table: Rectangular matrix with "Neuron" as first column header
+     - Rows = Neurons/Units, Columns = Class categories
+     - Use for SOM/clustering analysis results
+   - Click the "?" button next to Input Format for detailed examples
 
 2. UNDERSTANDING THE ANALYSIS
    This tool transforms clustering analysis results into traditional confusion matrices:
@@ -6155,18 +6209,32 @@ For support and inquiries: info@traceseis.com"""
 
 7. DATA REQUIREMENTS
    
-   EXCEL FORMAT:
-   • First column: Neuron identifiers (can be numbers or text)
-   • Subsequent columns: Category type names as headers
-   • Cell values: Number of samples of each type assigned to each neuron
-   • No empty rows/columns in the data area
+   CONFUSION MATRIX FORMAT:
+   • First column header: "Predicted" (or "Predicted_Class")
+   • Column headers: Actual class names
+   • Row labels: Predicted class names (same as column headers)
+   • Square matrix (n×n) where n = number of classes
+   • Cell values: Count of predictions
    
-   EXAMPLE DATA STRUCTURE:
-   Unit_ID  | Category_A | Category_B | Category_C | Category_D
-   -----------|-----------|-----------|-------|--------
-   Unit_001 |    45     |     12    |   3   |    0
-   Neuron_002 |     8     |     67    |  15   |    2
-   Neuron_003 |     2     |      5    |  89   |    1
+   EXAMPLE CONFUSION MATRIX:
+   Predicted    | Diabetic | Not Diabetic
+   -------------|----------|-------------
+   Diabetic     |    85   |     12
+   Not Diabetic |    15   |    188
+   
+   CONTINGENCY TABLE FORMAT (SOM):
+   • First column header: "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node")
+   • Column headers: Category type names
+   • Row labels: Neuron/Unit identifiers (typically numbers: 1, 2, 3...)
+   • Rectangular matrix (m neurons × n classes)
+   • Cell values: Frequency counts per neuron-class combination
+   
+   EXAMPLE CONTINGENCY TABLE:
+   Neuron | Shale | Wet Sand | Fine Sand
+   -------|-------|----------|----------
+   1      |   45  |    5     |    2
+   2      |   12  |   38     |    8
+   3      |    3  |   15     |   42
 
 8. TROUBLESHOOTING
    
@@ -6196,6 +6264,134 @@ For support and inquiries: info@traceseis.com"""
         
         # Close button
         ttk.Button(main_frame, text="Close", command=help_window.destroy, 
+                  width=15).pack(pady=(15, 0))
+    
+    def show_format_help(self):
+        """Show format selection help dialog"""
+        format_help_window = tk.Toplevel(self.root)
+        format_help_window.title("Input Format Guide")
+        format_help_window.geometry("900x700")
+        format_help_window.grab_set()  # Make modal
+        
+        # Center the window
+        format_help_window.transient(self.root)
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 450
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 350
+        format_help_window.geometry(f"+{x}+{y}")
+        
+        # Main frame with scrollbar
+        main_frame = ttk.Frame(format_help_window, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        ttk.Label(main_frame, text="Input Format Selection Guide", 
+                 font=('Arial', 16, 'bold')).pack(pady=(0, 15))
+        
+        # Help content with scrollbar
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        format_help_text = """INPUT FORMAT SELECTION
+
+When uploading data to CONFIRM, you must specify whether you're providing a Confusion Matrix or a Contingency Table.
+
+
+═══════════════════════════════════════════════════════════════════════════
+CONFUSION MATRIX
+═══════════════════════════════════════════════════════════════════════════
+
+A confusion matrix compares predicted classifications against actual classifications from a machine learning model.
+
+FORMAT REQUIREMENTS:
+• Square matrix (n×n) where n = number of classes
+• Rows represent Predicted classes (what the model predicted)
+• Columns represent Actual classes (ground truth)
+• Cell values: Count of predictions
+
+EXAMPLE:
+
+                 Actual →
+
+Predicted ↓    | Diabetic | Not Diabetic
+---------------|----------|-------------
+Diabetic       |    85    |     12       ← Model predicted "Diabetic"
+Not Diabetic   |    15    |    188       ← Model predicted "Not Diabetic"
+
+READING THE TABLE:
+• Cell [Diabetic, Diabetic] = 85: Model correctly predicted Diabetic 85 times
+• Cell [Diabetic, Not Diabetic] = 12: Model predicted Diabetic but was actually Not Diabetic (false positive)
+• Cell [Not Diabetic, Diabetic] = 15: Model predicted Not Diabetic but was actually Diabetic (false negative)
+• Cell [Not Diabetic, Not Diabetic] = 188: Model correctly predicted Not Diabetic 188 times
+
+USE CASE: Validating ML model reliability after training/testing
+
+EXCEL FORMAT:
+• First column header: "Predicted" (or "Predicted_Class", "Prediction")
+• Column headers: Actual class names
+• Row labels: Predicted class names (same as column headers for square matrix)
+• Cell values: Numeric counts
+
+
+═══════════════════════════════════════════════════════════════════════════
+CONTINGENCY TABLE (SOM FORMAT)
+═══════════════════════════════════════════════════════════════════════════
+
+A contingency table shows the distribution of observations across categories, commonly used with Self-Organizing Maps (SOM) or clustering analysis.
+
+FORMAT REQUIREMENTS:
+• Rectangular matrix (m neurons × n classes)
+• Rows represent Neurons/Units (SOM cells/clusters)
+• Columns represent Classes (categories being analyzed)
+• Cell values: Frequency counts per neuron-class combination
+
+EXAMPLE:
+
+              Classes →
+
+Neuron ↓  | Shale | Wet Sand | Fine Sand
+----------|-------|----------|----------
+1         |   45  |    5     |    2
+2         |   12  |   38     |    8
+3         |    3  |   15     |   42
+4         |   28  |   22     |   18
+5         |    8  |   35     |   25
+
+READING THE TABLE:
+• Cell [Neuron 1, Shale] = 45: Neuron 1 contains 45 observations classified as Shale
+
+USE CASE: Validating clustering quality or SOM neuron-class associations
+
+EXCEL FORMAT:
+• First column header: "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node")
+• Column headers: Class names
+• Row labels: Neuron/Unit identifiers (typically numbers: 1, 2, 3, ...)
+• Cell values: Numeric frequency counts
+
+
+═══════════════════════════════════════════════════════════════════════════
+IMPORTANT NOTES
+═══════════════════════════════════════════════════════════════════════════
+
+• CONFIRM converts contingency tables into confusion matrices internally before calculating chi-square and Cramér's V statistics
+• Both formats produce equivalent statistical validation results
+• The key difference is in the structure: confusion matrices are square (predicted vs actual), while contingency tables are rectangular (neurons vs classes)
+• Always select the correct format to ensure accurate analysis
+
+© 2025 TraceSeis, Inc. All rights reserved."""
+        
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, font=('Courier', 9), 
+                             bg='white', relief=tk.SUNKEN, borderwidth=1)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        text_widget.insert(1.0, format_help_text)
+        text_widget.configure(state='disabled')
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Close button
+        ttk.Button(main_frame, text="Close", command=format_help_window.destroy, 
                   width=15).pack(pady=(15, 0))
     
     def show_terms(self):
@@ -7227,10 +7423,31 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             )
         
         # Check for reasonable data dimensions
-        if df_cleaned.shape[0] < 5:
+        # Distinguish between Confusion Matrix and Contingency Table formats
+        
+        # Check if this looks like a confusion matrix (row labels match column labels)
+        row_label_set = set(str(label).strip().lower() for label in df_cleaned.iloc[:, 0])
+        col_label_set = set(str(label).strip().lower() for label in df_cleaned.columns[1:])
+        
+        if len(col_label_set) > 0:
+            label_overlap = len(row_label_set & col_label_set) / len(col_label_set)
+        else:
+            label_overlap = 0
+        
+        is_square = df_cleaned.shape[0] == (df_cleaned.shape[1] - 1)  # -1 for first label column
+        is_likely_confusion_matrix = (label_overlap >= 0.8 and is_square)
+        
+        if df_cleaned.shape[0] < 5 and not is_likely_confusion_matrix:
             raise ValueError(
-                f"Insufficient data rows for meaningful analysis. "
-                f"Minimum required: 5 rows, found: {df_cleaned.shape[0]} rows"
+                f"Insufficient data rows for SOM contingency table analysis. "
+                f"Minimum required: 5 rows (neurons), found: {df_cleaned.shape[0]} rows.\n\n"
+                f"If your data is already a CONFUSION MATRIX (not a contingency table):\n"
+                f"  - Row labels must MATCH column labels (same class names)\n"
+                f"  - Must be square (n×n)\n"
+                f"  - Example: 'Diabetic' row, 'Diabetic' column\n\n"
+                f"Current format detected:\n"
+                f"  - Label overlap: {label_overlap:.0%} (need ≥80%)\n"
+                f"  - Square: {is_square} (need True)"
             )
         
         # Validate column names (should not be empty or purely numeric)
@@ -7434,6 +7651,14 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         self.show_processing_overlay(f"Starting batch analysis of {len(selected_sheets)} sheets...")
         self.root.update()  # Force update to show overlay
         
+        # Capture format selection before worker thread starts (thread-safe)
+        selected_input_format = "Contingency Table"  # Default
+        try:
+            if hasattr(self, 'input_format_var'):
+                selected_input_format = self.input_format_var.get()
+        except Exception as e:
+            logger.warning(f"Could not read input format, using default: {e}")
+        
         def batch_worker():
             try:
                 # Clear previous batch results
@@ -7460,8 +7685,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                                   self.show_processing_overlay(f"Analyzing sheet {idx}/{total}: {name}"))
                     
                     try:
-                        # Process single sheet
-                        sheet_results = self.process_single_sheet_for_batch(sheet_name)
+                        # Process single sheet with format parameter
+                        sheet_results = self.process_single_sheet_for_batch(sheet_name, input_format=selected_input_format)
                         
                         if sheet_results and isinstance(sheet_results, dict):
                             with self.data_lock:
@@ -7555,6 +7780,14 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         self.set_processing_state(True)
         self.update_progress_status('Starting batch analysis...', 0)
         
+        # Capture format selection before worker thread starts (thread-safe)
+        selected_input_format = "Contingency Table"  # Default
+        try:
+            if hasattr(self, 'input_format_var'):
+                selected_input_format = self.input_format_var.get()
+        except Exception as e:
+            logger.warning(f"Could not read input format, using default: {e}")
+        
         def batch_worker():
             try:
                 # Clear previous batch results
@@ -7579,8 +7812,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                     self.update_progress_status(f'Analyzing sheet: {sheet_name}', progress)
                     
                     try:
-                        # Process single sheet
-                        sheet_results = self.process_single_sheet_for_batch(sheet_name)
+                        # Process single sheet with format parameter
+                        sheet_results = self.process_single_sheet_for_batch(sheet_name, input_format=selected_input_format)
                         
                         if sheet_results and isinstance(sheet_results, dict):
                             with self.data_lock:
@@ -7634,7 +7867,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         
         self.submit_task(batch_worker)
     
-    def process_single_sheet_for_batch(self, sheet_name, df=None):
+    def process_single_sheet_for_batch(self, sheet_name, df=None, input_format=None):
         """Process a single sheet and return key metrics for comparison"""
         try:
             # Read the sheet data if not provided
@@ -7677,43 +7910,73 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 columns=col_labels
             )
             
-            # Transform SOM to confusion matrix
-            unit_assignments = {}
-            for unit_id in analysis_matrix.index:
-                neuron_counts = analysis_matrix.loc[unit_id]
-                if neuron_counts.sum() > 0:
-                    winning_type = neuron_counts.idxmax()
-                    unit_assignments[unit_id] = winning_type
-                else:
-                    unit_assignments[unit_id] = None
+            # USE USER-SELECTED INPUT FORMAT (Option B: Explicit selection)
+            # Use format passed as parameter (captured before worker thread started)
+            # Fallback to reading from UI if parameter not provided (for backward compatibility)
+            selected_format = input_format if input_format is not None else "Contingency Table"
+            if input_format is None:
+                try:
+                    # Fallback: try to read from UI (may not work in worker threads)
+                    if hasattr(self, 'input_format_var'):
+                        selected_format = self.input_format_var.get()
+                    else:
+                        logger.warning("input_format_var not found, using default: Contingency Table")
+                except Exception as e:
+                    logger.warning(f"Could not read input format selection: {e}, using default: Contingency Table")
             
-            # Create sample records
-            sample_records = []
-            for unit_id in analysis_matrix.index:
-                neuron_counts = analysis_matrix.loc[unit_id]
-                predicted_type = unit_assignments[unit_id]
+            # Determine if input is already a confusion matrix based on user selection
+            is_already_confusion_matrix = (selected_format == "Confusion Matrix")
+            
+            if is_already_confusion_matrix:
+                # INPUT IS ALREADY A CONFUSION MATRIX - use directly
+                logger.info(f"Sheet {sheet_name}: Processing as CONFUSION MATRIX (user-selected format)")
+                confusion_matrix = analysis_matrix
                 
-                if predicted_type is not None:
-                    for actual_type, count in neuron_counts.items():
-                        for _ in range(int(count)):
-                            sample_records.append({
-                                'neuron': unit_id,
-                                'predicted': predicted_type,
-                                'actual': actual_type
-                            })
-            
-            # Create traditional confusion matrix
-            categories_types = list(analysis_matrix.columns)
-            confusion_matrix = pd.DataFrame(
-                0, 
-                index=categories_types,
-                columns=categories_types
-            )
-            
-            for record in sample_records:
-                predicted = record['predicted']
-                actual = record['actual']
-                confusion_matrix.loc[predicted, actual] += 1
+                # For compatibility, create dummy unit_assignments 
+                # (each row is its own "neuron" that predicts its row label)
+                unit_assignments = {row_label: row_label for row_label in analysis_matrix.index}
+                
+            else:
+                # INPUT IS A CONTINGENCY TABLE - transform to confusion matrix
+                logger.info(f"Sheet {sheet_name}: Processing as CONTINGENCY TABLE (user-selected format, neurons: {len(analysis_matrix)}, classes: {len(analysis_matrix.columns)})")
+                
+                # Transform SOM to confusion matrix
+                unit_assignments = {}
+                for unit_id in analysis_matrix.index:
+                    neuron_counts = analysis_matrix.loc[unit_id]
+                    if neuron_counts.sum() > 0:
+                        winning_type = neuron_counts.idxmax()
+                        unit_assignments[unit_id] = winning_type
+                    else:
+                        unit_assignments[unit_id] = None
+                
+                # Create sample records
+                sample_records = []
+                for unit_id in analysis_matrix.index:
+                    neuron_counts = analysis_matrix.loc[unit_id]
+                    predicted_type = unit_assignments[unit_id]
+                    
+                    if predicted_type is not None:
+                        for actual_type, count in neuron_counts.items():
+                            for _ in range(int(count)):
+                                sample_records.append({
+                                    'neuron': unit_id,
+                                    'predicted': predicted_type,
+                                    'actual': actual_type
+                                })
+                
+                # Create traditional confusion matrix
+                categories_types = list(analysis_matrix.columns)
+                confusion_matrix = pd.DataFrame(
+                    0, 
+                    index=categories_types,
+                    columns=categories_types
+                )
+                
+                for record in sample_records:
+                    predicted = record['predicted']
+                    actual = record['actual']
+                    confusion_matrix.loc[predicted, actual] += 1
             
             # Calculate key metrics
             matrix = confusion_matrix.values
@@ -7784,6 +8047,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             # Return summary results
             return {
                 'sheet_name': sheet_name,
+                'status': 'success',  # Mark as successful analysis
                 'total_observations': total_observations,
                 'total_neurons': total_neurons,
                 'active_neurons': active_neurons,
@@ -8462,7 +8726,7 @@ QUALITY DISTRIBUTION:
                     status = 'Valid' if chi_square_qc['test_valid'] else 'Warning'
                     qc_grade = self.calculate_qc_grade(sheet_data, chi_square_qc)
                     rows = sheet_data.get('total_observations', 0)
-                    completeness = f"{((sheet_data.get('total_observations', 0) / max(sheet_data.get('total_neurons', 1), 1)) * 100):.1f}%"
+                    completeness = f"{((sheet_data.get('active_neurons', 0) / max(sheet_data.get('total_neurons', 1), 1)) * 100):.1f}%"
                     accuracy = f"{sheet_data.get('global_fit', 0):.1f}%"
                     effect_size = f"{sheet_data.get('cramers_v', 0):.3f}"
                     
