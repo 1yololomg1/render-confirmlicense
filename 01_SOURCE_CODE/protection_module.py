@@ -101,42 +101,25 @@ class CommercialProtection:
         if not getattr(sys, 'frozen', False):
             return True
         
+        # For PyInstaller temp directory, always allow (check this first)
+        if "_MEI" in path:
+            return True
+        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
+            return True
+        
         # For compiled .exe, check if in standard installation locations
-        expected_locations = [
+        # Use comprehensive list of valid paths
+        valid_paths = [
             r"C:\Program Files",
             r"C:\Program Files (x86)",
+            os.path.expanduser(r"~\AppData\Local"),
             os.path.expanduser(r"~\AppData\Local\Programs"),
-        ]
-        
-        # Check if running from expected install location
-        for location in expected_locations:
-            if path.lower().startswith(location.lower()):
-                return True
-        
-        # Also allow running from Desktop or Downloads (users might run from there)
-        allowed_user_paths = [
             os.path.expanduser(r"~\Desktop"),
             os.path.expanduser(r"~\Downloads"),
-        ]
-        
-        for user_path in allowed_user_paths:
-            if path.lower().startswith(user_path.lower()):
-                return True
-        
-        # If we get here, it's an unexpected location for a compiled .exe
-        # But for development, we already returned True above
-        return False
-        valid_paths = [
-            "C:\\Program Files",
-            "C:\\Program Files (x86)",
-            os.path.expanduser("~\\AppData\\Local"),
-            os.path.expanduser("~\\Desktop"),
-            os.path.expanduser("~\\Documents"),
+            os.path.expanduser(r"~\Documents"),
             # Allow execution from development/test directories
             "CONFIRM_Distribution_Optimized",
             "OneDrive",
-            # Allow execution from current directory (for testing)
-            os.getcwd(),
         ]
         
         # Check if path contains any valid path segment
@@ -146,20 +129,17 @@ class CommercialProtection:
             if valid_normalized in path_normalized or path_normalized.startswith(valid_normalized):
                 return True
         
-        # For PyInstaller temp directory, always allow
-        if "_MEI" in path:
-            return True
-        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
-            return True
-        
         # For Nuitka compiled executables, check for Nuitka-specific paths
         # Nuitka creates executables directly, not in temp directories
-        # But we should allow execution from any valid location when frozen
+        # When frozen (either PyInstaller or Nuitka), be lenient
         if getattr(sys, 'frozen', False):
-            # When frozen (either PyInstaller or Nuitka), allow execution
-            # Nuitka doesn't use temp directories like PyInstaller
-            return True
-            
+            # Allow execution from current directory for frozen executables
+            # This handles cases where users run from custom locations
+            current_dir = os.getcwd().replace("\\", "/").lower()
+            if current_dir in path_normalized:
+                return True
+        
+        # If we get here, it's an unexpected location for a compiled .exe
         return False
     
     def _verify_file_integrity(self):

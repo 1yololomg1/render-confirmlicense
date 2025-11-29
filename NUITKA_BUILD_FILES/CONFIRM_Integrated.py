@@ -6591,59 +6591,72 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             raise ValueError(f"Excel file validation failed: {str(e)}")
     
     def validate_contingency_format(self, filename):
-        """Validate that the file contains properly formatted contingency tables"""
+        """Smart validation that handles both contingency tables and confusion matrices"""
         try:
             # Read first sheet to check format
             excel_file = pd.ExcelFile(filename)
             if not excel_file.sheet_names:
                 raise ValueError("Excel file contains no sheets")
-            
+
             # Check first sheet
             first_sheet = excel_file.sheet_names[0]
             df = pd.read_excel(filename, sheet_name=first_sheet, header=None)
-            
+
             # Check if we have enough data
-            if df.shape[0] < 2:
+            if df.shape[0] < 2 or df.shape[1] < 2:
                 raise ValueError(
-                    "Invalid format: Contingency table must have at least 2 rows of data.\n\n"
-                    "Expected format:\n"
-                    "Row 1: [empty cells]\n"
-                    "Row 2+: Numeric data only"
+                    "Invalid format: Matrix must have at least 2 rows and 2 columns of data.\n\n"
+                    "This tool accepts:\n"
+                    "• Contingency Tables (numeric IDs)\n"
+                    "• Confusion Matrices (with text labels)\n"
                 )
-            
+
+            # Auto-detect format based on data structure
             # Check if first column (after header row) contains text labels
-            # Start checking from row 1 (index 1) since row 0 may be empty
+            has_text_labels = False
+            has_numeric_data = False
+
             if df.shape[0] > 1:
                 first_data_row = df.iloc[1]
-                
-                # Check if first column is text (not numeric)
+
+                # Check if first column is text (confusion matrix format)
                 if first_data_row.iloc[0] is not None and not isinstance(first_data_row.iloc[0], (int, float)):
-                    raise ValueError(
-                        "Invalid format: First column contains text labels.\n\n"
-                        "CONFIRM expects contingency tables in this format:\n"
-                        "  Row 1: [empty cells]\n"
-                        "  Row 2: 1  [data]  [data]  [data]\n"
-                        "  Row 3: 2  [data]  [data]  [data]\n"
-                        "  Row 4: 3  [data]  [data]  [data]\n"
-                        "  Last:  Category names (optional)\n\n"
-                        "Your file has text labels like row names in the first column.\n"
-                        "Please use numeric IDs (1, 2, 3...) instead.\n\n"
-                        "Need help? Contact support@traceseis.com"
-                    )
-            
+                    has_text_labels = True
+
+                # Check if we have numeric data in the matrix
+                # Skip first column if it has text labels
+                start_col = 1 if has_text_labels else 0
+                if df.shape[1] > start_col:
+                    numeric_cells = df.iloc[1:, start_col:].apply(pd.to_numeric, errors='coerce')
+                    has_numeric_data = not numeric_cells.isnull().all().all()
+
+            # Validate that we have usable numeric data
+            if not has_numeric_data:
+                raise ValueError(
+                    "Invalid format: No numeric data found in the matrix.\n\n"
+                    "The file must contain numeric values representing counts or frequencies."
+                )
+
+            # Both formats are valid - contingency tables and confusion matrices
+            # Store detected format for informational purposes
+            if has_text_labels:
+                logger.info(f"Detected confusion matrix format (with text labels) in {filename}")
+            else:
+                logger.info(f"Detected contingency table format (numeric IDs) in {filename}")
+
             return True
-            
+
         except ValueError:
             # Re-raise our formatted errors
             raise
         except Exception as e:
             # Generic error for other issues
-            raise ValueError(f"Unable to read contingency table format: {str(e)}")
+            raise ValueError(f"Unable to read matrix format: {str(e)}")
         
     def browse_file(self):
         """Browse and select Excel file with enhanced security"""
         filename = filedialog.askopenfilename(
-            title="Select Excel File with Contingency Tables",
+            title="Select Excel File (Contingency Table or Confusion Matrix)",
             filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")],
             initialdir="C:/Users",
             defaultextension=".xlsx"
