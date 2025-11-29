@@ -7449,18 +7449,15 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         
         is_square = df_cleaned.shape[0] == (df_cleaned.shape[1] - 1)  # -1 for first label column
         is_likely_confusion_matrix = (label_overlap >= 0.8 and is_square)
-        
-        if df_cleaned.shape[0] < 5 and not is_likely_confusion_matrix:
+
+        # Relaxed validation - accept matrices with at least 2 rows (2x2 confusion matrix minimum)
+        # This allows both small confusion matrices and contingency tables
+        if df_cleaned.shape[0] < 2:
             raise ValueError(
-                f"Insufficient data rows for SOM contingency table analysis. "
-                f"Minimum required: 5 rows (neurons), found: {df_cleaned.shape[0]} rows.\n\n"
-                f"If your data is already a CONFUSION MATRIX (not a contingency table):\n"
-                f"  - Row labels must MATCH column labels (same class names)\n"
-                f"  - Must be square (n×n)\n"
-                f"  - Example: 'Diabetic' row, 'Diabetic' column\n\n"
-                f"Current format detected:\n"
-                f"  - Label overlap: {label_overlap:.0%} (need ≥80%)\n"
-                f"  - Square: {is_square} (need True)"
+                f"Insufficient data rows. Minimum required: 2 rows, found: {df_cleaned.shape[0]} rows.\n\n"
+                f"This tool accepts:\n"
+                f"  - Confusion matrices (2x2 or larger)\n"
+                f"  - Contingency tables from SOM analysis (any size)\n"
             )
         
         # Validate column names (should not be empty or purely numeric)

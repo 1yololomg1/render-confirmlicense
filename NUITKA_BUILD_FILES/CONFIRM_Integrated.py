@@ -7240,10 +7240,13 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             )
         
         # Check for reasonable data dimensions
-        if df_cleaned.shape[0] < 5:
+        # Relaxed validation - accept matrices with at least 2 rows (2x2 confusion matrix minimum)
+        if df_cleaned.shape[0] < 2:
             raise ValueError(
-                f"Insufficient data rows for meaningful analysis. "
-                f"Minimum required: 5 rows, found: {df_cleaned.shape[0]} rows"
+                f"Insufficient data rows. Minimum required: 2 rows, found: {df_cleaned.shape[0]} rows.\n\n"
+                f"This tool accepts:\n"
+                f"  - Confusion matrices (2x2 or larger)\n"
+                f"  - Contingency tables from SOM analysis (any size)\n"
             )
         
         # Validate column names (should not be empty or purely numeric)
