@@ -55,9 +55,18 @@ class CommercialProtection:
                 'procmon.exe', 'wireshark.exe', 'fiddler.exe', 'charles.exe'
             ]
             
+            # Optimized: Use a set for faster lookups and limit iterations
+            debugger_set = set(debugger_processes)
+            checked_count = 0
+            max_checks = 500  # Limit to prevent hanging on systems with many processes
+            
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break  # Prevent excessive scanning
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in debugger_processes:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in debugger_set:
                         self._terminate_application("Debugging software detected")
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -96,19 +105,30 @@ class CommercialProtection:
             pass
     
     def _is_valid_execution_path(self, path):
-        """Validate execution path"""
-        # Add your expected installation paths here
+        """Validate execution path - lenient for development, strict for production"""
+        # If running from Python source (not frozen), allow any path (development mode)
+        if not getattr(sys, 'frozen', False):
+            return True
+        
+        # For PyInstaller temp directory, always allow (check this first)
+        if "_MEI" in path:
+            return True
+        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
+            return True
+        
+        # For compiled .exe, check if in standard installation locations
+        # Use comprehensive list of valid paths
         valid_paths = [
-            "C:\\Program Files",
-            "C:\\Program Files (x86)",
-            os.path.expanduser("~\\AppData\\Local"),
-            os.path.expanduser("~\\Desktop"),
-            os.path.expanduser("~\\Documents"),
+            r"C:\Program Files",
+            r"C:\Program Files (x86)",
+            os.path.expanduser(r"~\AppData\Local"),
+            os.path.expanduser(r"~\AppData\Local\Programs"),
+            os.path.expanduser(r"~\Desktop"),
+            os.path.expanduser(r"~\Downloads"),
+            os.path.expanduser(r"~\Documents"),
             # Allow execution from development/test directories
             "CONFIRM_Distribution_Optimized",
             "OneDrive",
-            # Allow execution from current directory (for testing)
-            os.getcwd(),
         ]
         
         # Check if path contains any valid path segment
@@ -118,20 +138,17 @@ class CommercialProtection:
             if valid_normalized in path_normalized or path_normalized.startswith(valid_normalized):
                 return True
         
-        # For PyInstaller temp directory, always allow
-        if "_MEI" in path:
-            return True
-        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
-            return True
-        
         # For Nuitka compiled executables, check for Nuitka-specific paths
         # Nuitka creates executables directly, not in temp directories
-        # But we should allow execution from any valid location when frozen
+        # When frozen (either PyInstaller or Nuitka), be lenient
         if getattr(sys, 'frozen', False):
-            # When frozen (either PyInstaller or Nuitka), allow execution
-            # Nuitka doesn't use temp directories like PyInstaller
-            return True
-            
+            # Allow execution from current directory for frozen executables
+            # This handles cases where users run from custom locations
+            current_dir = os.getcwd().replace("\\", "/").lower()
+            if current_dir in path_normalized:
+                return True
+        
+        # If we get here, it's an unexpected location for a compiled .exe
         return False
     
     def _verify_file_integrity(self):
@@ -178,13 +195,20 @@ class CommercialProtection:
         """Detect API hooking attempts"""
         try:
             # Check for suspicious DLLs
-            suspicious_dlls = [
+            suspicious_dlls = set([
                 'detours.dll', 'easyhook.dll', 'minhook.dll', 'polyhook.dll'
-            ]
+            ])
+            
+            checked_count = 0
+            max_checks = 200  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in suspicious_dlls:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in suspicious_dlls:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -221,15 +245,21 @@ class CommercialProtection:
         """Detect virtual machine environment"""
         try:
             # Check for VM-specific processes
-            vm_processes = [
+            vm_processes = set([
                 'vmtoolsd.exe', 'vmwaretray.exe', 'vmwareuser.exe',
-                'vboxservice.exe', 'vboxtray.exe', 'vmtoolsd.exe',
-                'qemu-ga.exe', 'xenservice.exe'
-            ]
+                'vboxservice.exe', 'vboxtray.exe', 'qemu-ga.exe', 'xenservice.exe'
+            ])
+            
+            checked_count = 0
+            max_checks = 200  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in vm_processes:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in vm_processes:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
@@ -245,28 +275,29 @@ class CommercialProtection:
     def _detect_sandbox(self):
         """Detect sandbox environment"""
         try:
-            # Check for sandbox-specific processes
-            sandbox_processes = [
+            # Check for sandbox-specific processes and analysis tools
+            sandbox_processes = set([
                 'sandboxie.exe', 'cuckoo.exe', 'wireshark.exe',
                 'procmon.exe', 'regmon.exe', 'filemon.exe'
-            ]
+            ])
             
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
-                    if proc.info['name'].lower() in sandbox_processes:
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            
-            # Check for analysis tools
-            analysis_tools = [
+            analysis_tools = set([
                 'ida.exe', 'ida64.exe', 'ghidra.exe', 'radare2.exe',
                 'x64dbg.exe', 'ollydbg.exe', 'windbg.exe'
-            ]
+            ])
+            
+            # Combined check to avoid iterating twice
+            all_suspicious = sandbox_processes | analysis_tools
+            checked_count = 0
+            max_checks = 300  # Limit checks for performance
             
             for proc in psutil.process_iter(['pid', 'name']):
+                if checked_count >= max_checks:
+                    break
+                checked_count += 1
                 try:
-                    if proc.info['name'].lower() in analysis_tools:
+                    proc_name = proc.info.get('name', '').lower()
+                    if proc_name in all_suspicious:
                         return True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
