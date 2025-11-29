@@ -20,17 +20,107 @@ Connects to existing license API endpoints without creating new databases
 Uses existing admin key system and API structure
 """
 
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+import sys
+import os
+import platform
+
+# Check for tkinter availability before importing GUI components
+# This must happen before any GUI code is defined
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, scrolledtext
+    TKINTER_AVAILABLE = True
+    TKINTER_ERROR = None
+except ImportError as e:
+    TKINTER_AVAILABLE = False
+    TKINTER_ERROR = str(e)
+    print("\n" + "="*70)
+    print("ERROR: Tkinter GUI toolkit is not available")
+    print("="*70)
+    print(f"\nImport error: {e}")
+    print("\nThe License Management GUI requires tkinter to display the interface.")
+    print("Please install tkinter for your Python installation.\n")
+    
+    system = platform.system()
+    if system == "Linux":
+        print("For Debian/Ubuntu systems:")
+        print("  sudo apt-get update")
+        print("  sudo apt-get install python3-tk")
+        print("\nFor Red Hat/CentOS/Fedora systems:")
+        print("  sudo yum install python3-tkinter")
+        print("  # or for newer versions:")
+        print("  sudo dnf install python3-tkinter")
+        print("\nFor Arch Linux:")
+        print("  sudo pacman -S tk")
+    elif system == "Darwin":  # macOS
+        print("For macOS:")
+        print("  - If using Homebrew Python:")
+        print("    brew install python-tk")
+        print("  - If using official Python.org installer:")
+        print("    Reinstall Python from python.org (tkinter is included)")
+        print("  - If using pyenv:")
+        print("    Install Python with: env PYTHON_CONFIGURE_OPTS=\"--with-tcltk\" pyenv install <version>")
+    elif system == "Windows":
+        print("For Windows:")
+        print("  - If using official Python from python.org:")
+        print("    tkinter should be included by default. Try reinstalling Python.")
+        print("  - If using Anaconda/Miniconda:")
+        print("    conda install tk")
+        print("  - If using a custom build:")
+        print("    Install Python from python.org which includes tkinter")
+    else:
+        print(f"For {system}:")
+        print("  Please consult your system's package manager documentation")
+        print("  to install the tkinter package for Python 3.")
+    
+    print("\nAfter installation, verify with:")
+    print("  python3 -m tkinter")
+    print("\nThis should open a small demo window if tkinter is working correctly.")
+    print("="*70 + "\n")
+    sys.exit(1)
+
+# Check for display availability (for headless servers)
+DISPLAY_AVAILABLE = True
+if platform.system() != "Windows":
+    # On Linux/Unix, check for DISPLAY environment variable
+    if not os.getenv("DISPLAY"):
+        DISPLAY_AVAILABLE = False
+        print("\n" + "="*70)
+        print("ERROR: No graphical display available")
+        print("="*70)
+        print("\nThe License Management GUI requires a graphical display to run.")
+        print("You are running on a headless server without X11/display support.")
+        print("\nTo run this GUI application, you need:")
+        print("  1. A machine with an active graphical session")
+        print("  2. X11 forwarding enabled if using SSH (ssh -X)")
+        print("  3. Or run this on a local machine with a desktop environment")
+        print("="*70 + "\n")
+        sys.exit(1)
+else:
+    # On Windows, try to detect if we're in a headless environment
+    # by checking if we can access the display
+    try:
+        test_root = tk.Tk()
+        test_root.withdraw()  # Hide the test window
+        test_root.destroy()
+    except Exception as e:
+        DISPLAY_AVAILABLE = False
+        print("\n" + "="*70)
+        print("ERROR: Cannot access graphical display")
+        print("="*70)
+        print(f"\nDisplay error: {e}")
+        print("\nThe License Management GUI requires a graphical display to run.")
+        print("Please ensure you are running on a machine with an active graphical session.")
+        print("="*70 + "\n")
+        sys.exit(1)
+
 import requests
 import json
 import threading
 from datetime import datetime, timedelta
 import hashlib
-import platform
 import subprocess
 import re
-import os
 import base64
 from cryptography.fernet import Fernet
 from pathlib import Path
@@ -1032,16 +1122,26 @@ Revoked: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 def main():
     """Main function to run the application"""
-    root = tk.Tk()
-    app = LicenseManagerGUI(root)
-    
-    # Center the window
-    root.update_idletasks()
-    x = (root.winfo_screenwidth() // 2) - (root.winfo_width() // 2)
-    y = (root.winfo_screenheight() // 2) - (root.winfo_height() // 2)
-    root.geometry(f"+{x}+{y}")
-    
-    root.mainloop()
+    # Environment checks have already been performed at module import time
+    # If we reach here, tkinter is available and display is accessible
+    try:
+        root = tk.Tk()
+        app = LicenseManagerGUI(root)
+        
+        # Center the window
+        root.update_idletasks()
+        x = (root.winfo_screenwidth() // 2) - (root.winfo_width() // 2)
+        y = (root.winfo_screenheight() // 2) - (root.winfo_height() // 2)
+        root.geometry(f"+{x}+{y}")
+        
+        root.mainloop()
+    except Exception as e:
+        print(f"\nERROR: Failed to start GUI application: {e}")
+        print("\nIf this error persists after installing tkinter, please check:")
+        print("  1. Python version compatibility")
+        print("  2. Display server availability")
+        print("  3. System permissions")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

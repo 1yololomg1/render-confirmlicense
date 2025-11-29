@@ -751,10 +751,33 @@ def validate_license_activation():
     
     # Need to get license from user
     logger.info("Requesting license key from user...")
+    print("\n" + "=" * 60)
+    print("LICENSE ACTIVATION REQUIRED")
+    print("A license dialog window should appear.")
+    print("If you don't see it, check if it's behind other windows.")
+    print("=" * 60 + "\n")
     
     # Try to get license through dialog
-    dialog = LicenseDialog()
-    dialog.root.mainloop()
+    try:
+        dialog = LicenseDialog()
+        logger.info("License dialog created, starting mainloop...")
+        dialog.root.mainloop()
+        logger.info("License dialog mainloop completed")
+    except Exception as e:
+        logger.error(f"Failed to show license dialog: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("License Dialog Error", 
+                               f"Failed to show license dialog:\n\n{str(e)}\n\n"
+                               f"Please check the log file: {LOG_FILE}")
+            root.destroy()
+        except:
+            pass
+        return None
     
     if dialog.result and dialog.result.get('license_key'):
         license_key = dialog.result['license_key']
@@ -897,8 +920,20 @@ class LicenseDialog:
         self.root.geometry("650x400")  # Professional size
         self.root.resizable(False, False)
         
+        # Ensure window is visible and on top
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.after_idle(lambda: self.root.attributes('-topmost', False))
+        
         # Center the window
-        self.root.eval('tk::PlaceWindow . center')
+        try:
+            self.root.eval('tk::PlaceWindow . center')
+        except:
+            # Fallback manual centering if eval fails
+            self.root.update_idletasks()
+            x = (self.root.winfo_screenwidth() - self.root.winfo_reqwidth()) // 2
+            y = (self.root.winfo_screenheight() - self.root.winfo_reqheight()) // 2
+            self.root.geometry(f"+{x}+{y}")
         
         # Variables
         self.license_key = tk.StringVar()
@@ -913,6 +948,11 @@ class LicenseDialog:
         # Auto-validate on paste or Enter key
         self.license_key.trace('w', self.on_license_changed)
         self.root.bind('<Return>', self.on_enter_pressed)
+        
+        # Ensure window is focused and visible
+        self.root.focus_force()
+        self.root.update()
+        logger.info("License dialog window created and should be visible")
         
     def create_widgets(self):
         # Professional header
@@ -9742,11 +9782,21 @@ def show_terms_acceptance_dialog():
     terms_dialog.resizable(False, False)
     terms_dialog.grab_set()  # Make modal
     
+    # Ensure dialog is visible and on top
+    terms_dialog.lift()
+    terms_dialog.attributes('-topmost', True)
+    terms_dialog.after_idle(lambda: terms_dialog.attributes('-topmost', False))
+    
     # Center the dialog
     terms_dialog.update_idletasks()
     x = (terms_dialog.winfo_screenwidth() - 700) // 2
     y = (terms_dialog.winfo_screenheight() - 550) // 2
     terms_dialog.geometry(f"+{x}+{y}")
+    
+    # Ensure dialog is focused
+    terms_dialog.focus_force()
+    terms_dialog.update()
+    logger.info("Terms dialog window created and should be visible")
     
     # Variables to track user choice
     terms_accepted = False
@@ -10055,34 +10105,113 @@ def setup_application_environment():
 def main():
     """Enhanced main application entry point with comprehensive initialization"""
     try:
+        print(f"\nStarting {APP_NAME} v{APP_VERSION}...")
+        print(f"Log file: {LOG_FILE}\n")
+        
         # Initialize commercial protection
         is_compiled = getattr(sys, 'frozen', False)
         
-        if not PROTECTION_AVAILABLE:
+        # Protection should ONLY run in compiled executables (production)
+        # Skip entirely in development mode to avoid blocking/hanging
+        if not is_compiled:
+            # Development mode - skip protection entirely
+            logger.info("Running in development mode - protection skipped")
+            if PROTECTION_AVAILABLE:
+                logger.debug("Protection module available but disabled in development mode")
+        elif not PROTECTION_AVAILABLE:
+            # Compiled but protection module not available
             if PROTECTION_ERROR:
                 logger.warning(f"Protection module unavailable: {PROTECTION_ERROR}")
-                logger.warning("Application will run without commercial protection features")
-            else:
-                logger.warning("Protection module not available - running without protection")
-        elif PROTECTION_AVAILABLE:
-            # Try to initialize protection regardless of compilation status
-            # (can be useful for testing protection during development)
+            logger.warning("Application will run without commercial protection features")
+        else:
+            # Compiled executable with protection available - initialize it
+            # Initialize protection with robust timeout mechanism
+            print("Initializing commercial protection...")
+            logger.info("Attempting to initialize commercial protection...")
+            
+            start_time = time.time()
+            timeout_seconds = 3.0  # Reduced timeout for faster startup
+            
             try:
-                protection = initialize_protection()
-                if is_compiled:
-                    logger.info("Commercial protection initialized (compiled .exe mode)")
+                # Use threading with timeout to prevent hanging
+                protection_result = [None]
+                protection_error = [None]
+                init_complete = threading.Event()
+                
+                def init_in_thread():
+                    try:
+                        protection_result[0] = initialize_protection()
+                    except Exception as e:
+                        protection_error[0] = e
+                    finally:
+                        init_complete.set()
+                
+                init_thread = threading.Thread(target=init_in_thread, daemon=True)
+                init_thread.start()
+                
+                # Wait with timeout, checking periodically
+                waited = 0
+                check_interval = 0.1
+                while waited < timeout_seconds and not init_complete.is_set():
+                    time.sleep(check_interval)
+                    waited += check_interval
+                
+                if init_complete.is_set():
+                    # Initialization completed (success or error)
+                    if protection_error[0]:
+                        # Error occurred during initialization
+                        e = protection_error[0]
+                        logger.error(f"Protection initialization failed: {e}")
+                        logger.error(f"Error type: {type(e).__name__}")
+                        import traceback
+                        logger.debug(f"Protection initialization traceback: {traceback.format_exc()}")
+                        logger.warning("Application will continue without protection")
+                        print(f"⚠ Protection initialization failed: {e}")
+                        print("Continuing without protection...")
+                    else:
+                        # Success
+                        print("✓ Commercial protection initialized")
+                        if is_compiled:
+                            logger.info("Commercial protection initialized (compiled .exe mode)")
+                        else:
+                            logger.info("Commercial protection initialized (development/testing mode)")
                 else:
-                    logger.info("Commercial protection initialized (development/testing mode)")
+                    # Timeout - protection is taking too long
+                    elapsed = time.time() - start_time
+                    logger.warning(f"Protection initialization timed out after {elapsed:.1f} seconds - skipping")
+                    print(f"⚠ Protection initialization timed out after {elapsed:.1f}s - continuing without protection")
+                    logger.warning("Application will continue without protection")
+                    # Thread will continue in background as daemon, but we proceed without waiting
+                    
+            except KeyboardInterrupt:
+                print("\n⚠ Interrupted during protection initialization")
+                raise
             except Exception as e:
-                logger.error(f"Protection initialization failed: {e}")
+                logger.error(f"Unexpected error during protection initialization: {e}")
                 logger.error(f"Error type: {type(e).__name__}")
                 import traceback
-                logger.debug(f"Protection initialization traceback: {traceback.format_exc()}")
-                logger.warning("Application will continue without protection - this may indicate a configuration issue")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                print(f"⚠ Error during protection initialization: {e}")
+                logger.warning("Application will continue without protection")
         
         # Run complete initialization
+        print("Starting application initialization...")
         if not initialize_application():
             logger.critical("Application initialization failed - exiting")
+            print("\n" + "=" * 60)
+            print("ERROR: Application initialization failed!")
+            print(f"Please check the log file for details: {LOG_FILE}")
+            print("=" * 60 + "\n")
+            try:
+                # Try to show error dialog if tkinter is available
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showerror("Initialization Failed", 
+                                   f"Application failed to initialize.\n\n"
+                                   f"Please check the log file:\n{LOG_FILE}")
+                root.destroy()
+            except:
+                pass
             sys.exit(1)
         
         # Create main application window
@@ -10165,6 +10294,16 @@ def main():
         # Start the application
         logger.info("Starting main application loop...")
         logger.info("Application ready for user interaction")
+        print("\n" + "=" * 60)
+        print("Application started successfully!")
+        print("Main window should be visible now.")
+        print("=" * 60 + "\n")
+        
+        # Ensure window is visible
+        root.lift()
+        root.attributes('-topmost', True)
+        root.after_idle(lambda: root.attributes('-topmost', False))
+        root.focus_force()
         
         root.mainloop()
         
