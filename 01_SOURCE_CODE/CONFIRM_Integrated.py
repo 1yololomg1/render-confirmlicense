@@ -1663,14 +1663,18 @@ Total Samples: {best_config['Total_Samples']:,}"""
         # Sheet info
         info_frame = ttk.LabelFrame(parent, text=f"SHEET: {sheet_name}", padding="15")
         info_frame.pack(fill=tk.X, padx=10, pady=10)
-        
+
+        # Format-aware terminology
+        is_confusion_matrix = sheet_data.get('is_confusion_matrix', False)
+        unit_term = "Classes" if is_confusion_matrix else "Neurons"
+
         info_text = f"""Total Observations: {sheet_data['total_observations']:,}
-Total Neurons: {sheet_data['total_neurons']}
-Active Neurons: {sheet_data['active_neurons']}
+Total {unit_term}: {sheet_data['total_neurons']}
+Active {unit_term}: {sheet_data['active_neurons']}
 Classification Accuracy: {sheet_data['global_fit']:.2f}%
 Association Strength (Cramer's V): {sheet_data['cramers_v']:.4f}
-Inactive Neurons: {sheet_data['percent_undefined']:.1f}%"""
-        
+Inactive {unit_term}: {sheet_data['percent_undefined']:.1f}%"""
+
         ttk.Label(info_frame, text=info_text, font=('Arial', 11)).pack(anchor='w')
         
         # Confusion matrix visualization
@@ -1996,18 +2000,23 @@ Neuron Utilization: {(sheet_data['active_neurons']/sheet_data['total_neurons']*1
         # Left column - metrics
         left_frame = ttk.Frame(content_frame)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
+
+        # Format-aware terminology
+        is_confusion_matrix = sheet_data.get('is_confusion_matrix', False)
+        unit_term = "Classes" if is_confusion_matrix else "Neurons"
+        utilization_term = "Class Coverage" if is_confusion_matrix else "Neuron Utilization"
+
         metrics_text = f"""PERFORMANCE METRICS:
 - Classification Accuracy: {sheet_data['global_fit']:.2f}%
 - Association Strength (Cramer's V): {sheet_data['cramers_v']:.4f}
 - Total Observations: {sheet_data['total_observations']:,}
-- Total Neurons: {sheet_data['total_neurons']}
-- Active Neurons: {sheet_data['active_neurons']}
-- Inactive Neurons: {sheet_data['total_neurons'] - sheet_data['active_neurons']}
-- Neuron Utilization: {(sheet_data['active_neurons']/sheet_data['total_neurons']*100):.1f}%
+- Total {unit_term}: {sheet_data['total_neurons']}
+- Active {unit_term}: {sheet_data['active_neurons']}
+- Inactive {unit_term}: {sheet_data['total_neurons'] - sheet_data['active_neurons']}
+- {utilization_term}: {(sheet_data['active_neurons']/sheet_data['total_neurons']*100):.1f}%
 - Zero Entries Percentage: {sheet_data['percent_undefined']:.1f}%"""
-        
-        metrics_label = ttk.Label(left_frame, text=metrics_text, font=('Arial', 11), 
+
+        metrics_label = ttk.Label(left_frame, text=metrics_text, font=('Arial', 11),
                                  foreground='darkgreen', justify='left')
         metrics_label.pack(anchor='w')
         
@@ -8058,6 +8067,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             return {
                 'sheet_name': sheet_name,
                 'status': 'success',  # Mark as successful analysis
+                'input_format': selected_format,  # Store format for terminology selection
+                'is_confusion_matrix': is_already_confusion_matrix,  # For display logic
                 'total_observations': total_observations,
                 'total_neurons': total_neurons,
                 'active_neurons': active_neurons,
@@ -8117,24 +8128,36 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
             sheet_results = self.batch_results[sheet_name]
             self.results_text.delete(1.0, tk.END)
             
+            # Determine terminology based on input format
+            is_confusion_matrix = sheet_results.get('is_confusion_matrix', False)
+            if is_confusion_matrix:
+                unit_term = "Classes"
+                unit_term_singular = "Class"
+                utilization_term = "Class Coverage"
+            else:
+                unit_term = "Neurons"
+                unit_term_singular = "Neuron"
+                utilization_term = "Neuron Utilization"
+
             # Header
             header = f"""SINGLE SHEET ANALYSIS RESULTS
 {'='*60}
 
 SHEET: {sheet_name}
 File: {os.path.basename(self.file_path.get())}
+Input Format: {sheet_results.get('input_format', 'Contingency Table')}
 
 ANALYSIS SUMMARY:
 Total Observations: {sheet_results['total_observations']:,}
-Total Neurons: {sheet_results['total_neurons']}
-Active Neurons: {sheet_results['active_neurons']}
-Inactive Neurons: {sheet_results['total_neurons'] - sheet_results['active_neurons']}
+Total {unit_term}: {sheet_results['total_neurons']}
+Active {unit_term}: {sheet_results['active_neurons']}
+Inactive {unit_term}: {sheet_results['total_neurons'] - sheet_results['active_neurons']}
 
 PERFORMANCE METRICS:
 Global Fit (Classification Accuracy): {sheet_results['global_fit']:.2f}%
 Association Strength (Cramer's V): {sheet_results['cramers_v']:.4f}
 Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
-Neuron Utilization: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
+{utilization_term}: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
 
 PERFORMANCE INTERPRETATION:
 """
@@ -8160,6 +8183,12 @@ PERFORMANCE INTERPRETATION:
                 association_grade = "WEAK"
                 association_desc = "Weak association - SOM may not be effectively separating categories"
             
+            # Format-aware utilization description
+            if is_confusion_matrix:
+                utilization_desc = "All classes are represented in the data"
+            else:
+                utilization_desc = "Higher utilization indicates more efficient analysis configuration"
+
             interpretation = f"""Classification Accuracy: {accuracy_grade}
 • {accuracy_desc}
 • Score: {sheet_results['global_fit']:.2f}%
@@ -8168,9 +8197,9 @@ Association Strength: {association_grade}
 • {association_desc}
 • Cramer's V: {sheet_results['cramers_v']:.4f}
 
-Neuron Utilization: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
-• {sheet_results['active_neurons']} out of {sheet_results['total_neurons']} neurons are active
-• Higher utilization indicates more efficient analysis configuration
+{utilization_term}: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
+• {sheet_results['active_neurons']} out of {sheet_results['total_neurons']} {unit_term.lower()} are active
+• {utilization_desc}
 
 Statistical Significance:
 • Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
