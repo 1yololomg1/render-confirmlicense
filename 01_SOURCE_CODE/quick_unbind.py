@@ -5,9 +5,22 @@ Quick Firebase license unbind - direct REST API approach
 import requests
 from datetime import datetime
 import urllib.parse
+import os
 
 FIREBASE_URL = "https://confirm-license-manager-default-rtdb.firebaseio.com"
-LICENSE_KEY = "dfc2077dbbad862a:2026-11-14T00:33:42.003Z:038b17a3dbc81f44"
+
+# Get license key from environment variable (security best practice)
+# You need to set this: set CONFIRM_LICENSE_KEY=your_license_key_here
+LICENSE_KEY = os.getenv("CONFIRM_LICENSE_KEY")
+
+if not LICENSE_KEY:
+    print("ERROR: CONFIRM_LICENSE_KEY environment variable not set!")
+    print("Please set it first:")
+    print("  set CONFIRM_LICENSE_KEY=your_license_key")
+    print()
+    print("Example:")
+    print("  set CONFIRM_LICENSE_KEY=dfc2077dbbad862a:2026-11-14T00:33:42.003Z:038b17a3dbc81f44")
+    exit(1)
 
 print("Unbinding license from old computer...")
 print(f"License: {LICENSE_KEY}")
