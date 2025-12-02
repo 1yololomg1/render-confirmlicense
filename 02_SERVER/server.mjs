@@ -292,21 +292,27 @@ app.post('/validate', async (req, res) => {
     const data = snapshot.val();
     
     if (!data) {
+      console.log(`❌ License ${licenseId} NOT FOUND in Firebase`);
       return res.status(404).json({ error: 'License not found' });
     }
     
+    console.log(`✓ License ${licenseId} found in Firebase, checking validity...`);
+    
     // Check if license is revoked
     if (data.revoked) {
+      console.log(`❌ License ${licenseId} is REVOKED`);
       return res.status(403).json({ error: 'License has been revoked' });
     }
     
     // Check expiry
     if (new Date() > new Date(expiry)) {
+      console.log(`❌ License ${licenseId} is EXPIRED (expiry: ${expiry})`);
       return res.status(403).json({ error: 'License expired' });
     }
     
     // Check if already activated on different machine
     if (data.computer_id && data.computer_id !== machine_id) {
+      console.log(`❌ License ${licenseId} MACHINE MISMATCH - Expected: ${data.computer_id}, Got: ${machine_id}`);
       return res.status(403).json({ error: 'License already activated on another machine' });
     }
     
@@ -317,9 +323,10 @@ app.post('/validate', async (req, res) => {
         bound_at: new Date().toISOString(),
         binding_method: 'automatic'
       });
-      console.log(`License ${licenseId} bound to machine ${machine_id?.substring(0, 8)}...`);
+      console.log(`✓ License ${licenseId} bound to machine ${machine_id?.substring(0, 8)}...`);
     }
     
+    console.log(`✅ License ${licenseId} validation SUCCESSFUL - Returning valid response`);
     res.json({ 
       valid: true, 
       expiry,
