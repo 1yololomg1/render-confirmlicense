@@ -1,0 +1,37 @@
+HOW TO RUN THE BUILD SCRIPT
+========================================
+
+If the build script closes immediately when you double-click it, use one of these methods:
+
+METHOD 1: Use START_BUILD.bat (RECOMMENDED)
+--------------------------------------------
+1. Double-click: START_BUILD.bat
+   - This wrapper keeps the window open so you can see any errors
+
+METHOD 2: Run from Command Prompt
+----------------------------------
+1. Open Command Prompt or PowerShell
+2. Navigate to: cd C:\porfolio\render-confirmlicense\01_SOURCE_CODE
+3. Run: build_cxfreeze.bat
+
+METHOD 3: Right-Click and Select
+----------------------------------
+1. Right-click on build_cxfreeze.bat
+2. Select "Run as administrator" or "Open with Command Prompt"
+
+METHOD 4: If you get "Access is denied" errors
+-----------------------------------------------
+1. First run: cleanup_build_folder.bat
+2. Wait for it to complete
+3. Then run: START_BUILD.bat
+
+TROUBLESHOOTING
+========================================
+
+If the window still closes immediately:
+- Check if Python is installed: Open Command Prompt and type "python --version"
+- Make sure you're in the correct directory
+- Try running from Command Prompt instead of double-clicking
+
+The START_BUILD.bat file will keep the window open so you can see what's happening.
+

@@ -1,5 +1,5 @@
 ---
-description: Specification for security-related implementation details including hardware binding, anti-tampering, and license validation
+description: Technical security and protection mechanisms for license validation and anti-tampering systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -268,44 +268,38 @@ Implementation Locations:
 $END$
 
  If you're using this file in context, clearly say in italics in one small line that "Context added by Giga security-implementation" along with specifying exactly what information was used from this file in a human-friendly way, instead of using kebab-case use normal sentence case.
-# === END USER INSTRUCTIONS ===
 
+---
+description: Specification for security-related implementation details including hardware binding, anti-tampering, and license validation
+---
 # security-implementation
-
 ## Core Security Layers
-
 ### Hardware Binding (Importance: 95/100)
 - Hardware fingerprinting using multiple identifiers:
   * CPU ID extraction
   * Motherboard serial number capture
   * BIOS data collection
 - Combined fingerprint generation for license locking
-
 ### Anti-Tampering Protection (Importance: 90/100)
 Located in 01_SOURCE_CODE/protection_module.py:
 - Runtime integrity verification system
 - Process monitoring for debugging attempts
 - Active tamper detection mechanisms
-
 ### Virtualization Detection (Importance: 85/100)
 - Virtual machine environment detection
 - Sandbox runtime analysis
 - License enforcement blocks for unauthorized environments
-
 ### License Validation (Importance: 88/100)
 Located in 01_SOURCE_CODE/license_manager_gui.py:
 - Multi-stage license verification workflow
 - Hardware-locked license validation rules
 - Time-based expiration enforcement
 - Tier-specific feature authorization
-
 ### Admin Security (Importance: 80/100)
 - Encrypted credential storage system
 - Secure admin access control
 - Multi-stage revocation workflow handling
-
 ## Security Implementation Map
-
 ### Protection Module Components
 ```
 01_SOURCE_CODE/protection_module.py
@@ -313,7 +307,6 @@ Located in 01_SOURCE_CODE/license_manager_gui.py:
 ├── Anti-Debug Detection
 └── Runtime Verification
 ```
-
 ### License Management Security
 ```
 01_SOURCE_CODE/license_manager_gui.py
@@ -321,6 +314,47 @@ Located in 01_SOURCE_CODE/license_manager_gui.py:
 ├── Credential Encryption
 └── Revocation Workflow
 ```
+$END$
+# === END USER INSTRUCTIONS ===
+
+# security-implementation
+
+The security implementation consists of three primary protection layers:
+
+## Anti-Tampering System
+- Runtime integrity verification checks for modified code execution
+- Custom tampering detection algorithms monitor system state
+- Machine fingerprinting validates hardware environment
+Importance Score: 85/100
+
+## Virtualization Protection
+Located in: 01_SOURCE_CODE/protection_module.py
+- Active detection of virtual machine environments 
+- Anti-debugging mechanisms prevent runtime analysis
+- Hardware binding validation against VM migration
+Importance Score: 80/100
+
+## License Validation Architecture
+Located in: 01_SOURCE_CODE/admin_unbind_license.py
+- Multi-tier validation using server-first approach with Firebase fallback
+- Cryptographic binding between license and hardware identifiers
+- Timestamp validation for license unbinding operations
+- Audit trail tracking for security events
+Importance Score: 75/100
+
+Key Protection Features:
+1. Hardware-based binding using machine fingerprinting
+2. Multi-layer security checks for license validation
+3. Automated detection of security circumvention attempts
+4. Cryptographic validation of license integrity
+5. Secure unbinding workflow with temporal constraints
+
+The implementation prioritizes protection against:
+- License tampering
+- Virtual environment exploitation
+- Debugging attempts
+- Unauthorized license transfers
+- Hardware binding violations
 
 $END$
 
