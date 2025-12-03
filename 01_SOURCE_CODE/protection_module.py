@@ -32,18 +32,68 @@ import platform
 class CommercialProtection:
     """Advanced protection mechanisms for commercial software"""
     
+    def _detect_build_environment(self):
+        """Detect if we're running in a build environment"""
+        try:
+            # Check for common build environment indicators
+            build_indicators = [
+                "nuitka", "pyinstaller", "cx_freeze", "py2exe",
+                "build", "dist", "setup.py", "pip", "conda"
+            ]
+
+            # Check command line arguments
+            for arg in sys.argv:
+                if any(indicator in arg.lower() for indicator in build_indicators):
+                    return True
+
+            # Check environment variables
+            env_vars = os.environ.keys()
+            if any(indicator in var.lower() for indicator in build_indicators for var in env_vars):
+                return True
+
+            # Check if we're running from a temporary build directory
+            current_path = os.path.abspath(sys.executable)
+            if any(indicator in current_path.lower() for indicator in ["temp", "build", "dist", "_mei"]):
+                return True
+
+            return False
+
+        except Exception as e:
+            self._log_debug(f"Error detecting build environment: {e}")
+            return False
+
     def __init__(self):
         self.start_time = time.time()
         self.original_argv = sys.argv.copy()
         self.protection_active = True
-        self._setup_protection()
+        self.debug_mode = os.getenv("CONFIRM_DEBUG", "false").lower() == "true"
+        self.build_mode = self._detect_build_environment()
+        self._log_debug(f"Protection module initialized - Build mode: {self.build_mode}")
+        if not self.build_mode:
+            self._setup_protection()
+        else:
+            self._log_debug("Running in build environment - skipping protection setup")
     
+    def _log_debug(self, message):
+        """Log debug messages with timestamp"""
+        if self.debug_mode:
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            debug_message = f"[PROTECTION DEBUG {timestamp}] {message}"
+            print(debug_message, file=sys.stderr)
+            try:
+                with open("protection_debug.log", "a") as f:
+                    f.write(debug_message + "\n")
+            except:
+                pass
+
     def _setup_protection(self):
         """Initialize all protection mechanisms"""
+        self._log_debug("Starting protection setup")
         self._anti_debugging()
         self._anti_tampering()
         self._integrity_check()
         self._runtime_monitoring()
+        self._log_debug("Protection setup completed")
     
     def _anti_debugging(self):
         """Implement anti-debugging measures"""
@@ -92,28 +142,41 @@ class CommercialProtection:
     def _anti_tampering(self):
         """Implement anti-tampering measures"""
         try:
+            self._log_debug("Starting anti-tampering checks")
             # Check if running from expected location
             current_path = os.path.abspath(sys.executable)
-            if not self._is_valid_execution_path(current_path):
-                self._terminate_application("Invalid execution path")
-            
-            # Verify file integrity
-            if not self._verify_file_integrity():
-                self._terminate_application("File integrity violation")
-                
-        except Exception:
+            self._log_debug(f"Current executable path: {current_path}")
+
+            # Skip path validation during build processes
+            if not self.build_mode:
+                if not self._is_valid_execution_path(current_path):
+                    self._log_debug("Invalid execution path detected - terminating")
+                    self._terminate_application("Invalid execution path")
+
+                # Verify file integrity
+                if not self._verify_file_integrity():
+                    self._log_debug("File integrity violation detected - terminating")
+                    self._terminate_application("File integrity violation")
+            else:
+                self._log_debug("Build mode detected - skipping path validation")
+
+            self._log_debug("Anti-tampering checks passed")
+
+        except Exception as e:
+            self._log_debug(f"Exception in anti-tampering: {e}")
             pass
     
     def _is_valid_execution_path(self, path):
         """Validate execution path - lenient for development, strict for production"""
-        # If running from Python source (not frozen), allow any path (development mode)
-        if not getattr(sys, 'frozen', False):
+        # If running from Python source (not frozen/compiled), allow any path (development mode)
+        # PyInstaller sets sys.frozen, Nuitka sets __compiled__
+        is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
+        if not is_compiled:
             return True
         
         # For PyInstaller temp directory, always allow (check this first)
         if "_MEI" in path:
             return True
-        if hasattr(sys, '_MEIPASS') and sys._MEIPASS in path:
             return True
         
         # For compiled .exe, check if in standard installation locations
@@ -141,7 +204,8 @@ class CommercialProtection:
         # For Nuitka compiled executables, check for Nuitka-specific paths
         # Nuitka creates executables directly, not in temp directories
         # When frozen (either PyInstaller or Nuitka), be lenient
-        if getattr(sys, 'frozen', False):
+        is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
+        if is_compiled:
             # Allow execution from current directory for frozen executables
             # This handles cases where users run from custom locations
             current_dir = os.getcwd().replace("\\", "/").lower()
@@ -167,15 +231,19 @@ class CommercialProtection:
     
     def _integrity_check(self):
         """Perform runtime integrity checks"""
+        if self.build_mode:
+            self._log_debug("Build mode detected - skipping integrity checks")
+            return
+
         try:
             # Check for memory patching
             if self._detect_memory_patching():
                 self._terminate_application("Memory patching detected")
-            
+
             # Check for API hooking
             if self._detect_api_hooking():
                 self._terminate_application("API hooking detected")
-                
+
         except Exception:
             pass
     
@@ -218,25 +286,29 @@ class CommercialProtection:
     
     def _runtime_monitoring(self):
         """Monitor runtime for suspicious activity"""
+        if self.build_mode:
+            self._log_debug("Build mode detected - skipping runtime monitoring")
+            return
+
         def monitor():
             while self.protection_active:
                 try:
                     # Check for virtual machines
                     if self._detect_virtual_machine():
                         self._terminate_application("Virtual machine detected")
-                    
+
                     # Check for sandbox environments
                     if self._detect_sandbox():
                         self._terminate_application("Sandbox environment detected")
-                    
+
                     # Check execution time (prevent automated analysis)
                     if time.time() - self.start_time > 3600:  # 1 hour limit
                         self._terminate_application("Execution time exceeded")
-                    
+
                     time.sleep(30)  # Check every 30 seconds
                 except Exception:
                     break
-        
+
         # Start monitoring in background thread
         monitor_thread = threading.Thread(target=monitor, daemon=True)
         monitor_thread.start()

@@ -63,7 +63,8 @@ PROTECTION_AVAILABLE = False
 PROTECTION_ERROR = None
 
 # Check execution mode
-is_compiled = getattr(sys, 'frozen', False)
+# PyInstaller sets sys.frozen, Nuitka sets __compiled__
+is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
 force_protection = os.getenv("CONFIRM_FORCE_PROTECTION") == "true"
 
 if is_compiled or force_protection:
@@ -3398,8 +3399,19 @@ def check_dependencies():
     """Enhanced dependency checking with detailed reporting and user guidance"""
     logger.info("Checking system dependencies...")
     
-    # Check if running as frozen executable
-    is_frozen = getattr(sys, 'frozen', False)
+    # Check if running as frozen/compiled executable
+    # PyInstaller: sys.frozen = True
+    # Nuitka: __compiled__ exists OR we're running from .dist folder OR no .py source alongside exe
+    is_frozen = (
+        getattr(sys, 'frozen', False) or  # PyInstaller
+        '__compiled__' in dir() or  # Nuitka (sometimes)
+        hasattr(sys.modules.get('__main__'), '__compiled__') or  # Nuitka module level
+        (hasattr(sys, 'executable') and sys.executable.endswith('.exe') and 
+         not os.path.exists(sys.executable.replace('.exe', '.py')))  # Running as .exe without source
+    )
+    
+    logger.info(f"Frozen/compiled detection: {is_frozen} (sys.frozen={getattr(sys, 'frozen', False)}, exe={sys.executable})")
+
     
     if is_frozen:
         # When frozen, all dependencies should be bundled
@@ -3413,7 +3425,9 @@ def check_dependencies():
             'matplotlib': 'matplotlib',
             'seaborn': 'seaborn',
             'openpyxl': 'openpyxl',
-            'requests': 'requests'
+            'requests': 'requests',
+            'cryptography': 'cryptography',
+            'psutil': 'psutil',
         }
         
         missing_deps = []
@@ -10109,7 +10123,8 @@ def main():
         print(f"Log file: {LOG_FILE}\n")
         
         # Initialize commercial protection
-        is_compiled = getattr(sys, 'frozen', False)
+        # PyInstaller sets sys.frozen, Nuitka sets __compiled__
+        is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
         
         # Protection should ONLY run in compiled executables (production)
         # Skip entirely in development mode to avoid blocking/hanging
