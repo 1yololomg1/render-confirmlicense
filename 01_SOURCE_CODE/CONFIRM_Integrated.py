@@ -70,18 +70,30 @@ force_protection = os.getenv("CONFIRM_FORCE_PROTECTION") == "true"
 if is_compiled or force_protection:
     # Running as compiled .exe OR developer explicitly enabled protection for testing
     try:
-        from protection_module import initialize_protection, cleanup_protection
+        from protection_module import (
+            initialize_protection, cleanup_protection, ProtectionViolation,
+            set_protection_error_callback, set_protection_logger
+        )
         PROTECTION_AVAILABLE = True
     except ImportError as e:
         PROTECTION_ERROR = str(e)
         PROTECTION_AVAILABLE = False
+        ProtectionViolation = None
+        set_protection_error_callback = None
+        set_protection_logger = None
     except Exception as e:
         PROTECTION_ERROR = f"Unexpected error importing protection_module: {str(e)}"
         PROTECTION_AVAILABLE = False
+        ProtectionViolation = None
+        set_protection_error_callback = None
+        set_protection_logger = None
 else:
     # Normal development mode - skip protection
     PROTECTION_AVAILABLE = False
     PROTECTION_ERROR = "Protection disabled in development mode (set CONFIRM_FORCE_PROTECTION=true to test)"
+    ProtectionViolation = None
+    set_protection_error_callback = None
+    set_protection_logger = None
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
@@ -123,30 +135,85 @@ __copyright__ = "Copyright (C) 2025 TraceSeis, Inc."
 __license__ = "TraceSeis, Inc. Commercial License"
 __contact__ = "info@traceseis.com"
 
-# Ensure configuration directory exists
-CONFIG_DIR.mkdir(exist_ok=True)
-
-# Initialize logging system
-def setup_logging():
-    """Initialize comprehensive logging system"""
+# Ensure configuration directory exists with robust error handling
+def ensure_config_directory():
+    """Create config directory with multiple fallback options"""
     try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        return True
+    except (PermissionError, OSError) as e:
+        # Try fallback to temp directory
+        try:
+            import tempfile
+            global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE
+            fallback_dir = Path(tempfile.gettempdir()) / "CONFIRM_Data"
+            fallback_dir.mkdir(parents=True, exist_ok=True)
+            CONFIG_DIR = fallback_dir
+            SETTINGS_FILE = CONFIG_DIR / "settings.json"
+            LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
+            LOG_FILE = CONFIG_DIR / "confirm.log"
+            print(f"WARNING: Could not create config directory in AppData, using: {CONFIG_DIR}")
+            print(f"Error: {e}")
+            return True
+        except Exception as e2:
+            print(f"CRITICAL: Failed to create any config directory: {e2}")
+            print(f"Original error: {e}")
+            return False
+
+if not ensure_config_directory():
+    print("FATAL: Cannot create configuration directory. Application cannot continue.")
+    sys.exit(1)
+
+# Initialize logging system with robust fallbacks
+def setup_logging():
+    """Initialize comprehensive logging system with multiple fallback options"""
+    logger = None
+    
+    # Try full logging with file handler first
+    try:
+        # Ensure log file directory exists
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler(LOG_FILE, encoding='utf-8'),
                 logging.StreamHandler(sys.stdout)
-            ]
+            ],
+            force=True
         )
         logger = logging.getLogger(APP_NAME)
         logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
         return logger
-    except Exception as e:
-        # Fallback to basic logging if file logging fails
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-        logger = logging.getLogger(APP_NAME)
-        logger.warning(f"Failed to initialize file logging: {e}")
-        return logger
+    except (PermissionError, OSError, IOError) as e:
+        # File logging failed, try console-only logging
+        try:
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                handlers=[logging.StreamHandler(sys.stdout)],
+                force=True
+            )
+            logger = logging.getLogger(APP_NAME)
+            logger.warning(f"File logging unavailable (using console only): {e}")
+            logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
+            return logger
+        except Exception as e2:
+            # Last resort: basic logging
+            try:
+                logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', force=True)
+                logger = logging.getLogger(APP_NAME)
+                logger.warning(f"Limited logging available: {e2}")
+                return logger
+            except Exception as e3:
+                # Ultimate fallback: print statements
+                print(f"CRITICAL: Logging system completely failed: {e3}")
+                print(f"Previous errors: {e}, {e2}")
+                # Return a minimal logger that at least won't crash
+                logger = logging.getLogger(APP_NAME)
+                logger.setLevel(logging.INFO)
+                return logger
 
 # Initialize logger
 logger = setup_logging()
@@ -921,20 +988,38 @@ class LicenseDialog:
         self.root.geometry("650x400")  # Professional size
         self.root.resizable(False, False)
         
-        # Ensure window is visible and on top
-        self.root.lift()
-        self.root.attributes('-topmost', True)
-        self.root.after_idle(lambda: self.root.attributes('-topmost', False))
-        
-        # Center the window
+        # Ensure window is visible and on top - enhanced visibility
         try:
-            self.root.eval('tk::PlaceWindow . center')
-        except:
-            # Fallback manual centering if eval fails
+            self.root.lift()
+            self.root.attributes('-topmost', True)
+            self.root.focus_force()
+            # Keep on top briefly, then allow normal stacking
+            self.root.after(100, lambda: self.root.attributes('-topmost', False))
+            # Force window to front again after a moment
+            self.root.after(200, lambda: self.root.lift())
+        except Exception as e:
+            logger.warning(f"Could not set window attributes: {e}")
+        
+        # Center the window with robust error handling
+        try:
             self.root.update_idletasks()
-            x = (self.root.winfo_screenwidth() - self.root.winfo_reqwidth()) // 2
-            y = (self.root.winfo_screenheight() - self.root.winfo_reqheight()) // 2
-            self.root.geometry(f"+{x}+{y}")
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            window_width = 650
+            window_height = 400
+            x = (screen_width - window_width) // 2
+            y = (screen_height - window_height) // 2
+            # Ensure window is on screen
+            x = max(0, min(x, screen_width - window_width))
+            y = max(0, min(y, screen_height - window_height))
+            self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        except Exception as e:
+            logger.warning(f"Could not center window: {e}")
+            # Fallback: try eval method
+            try:
+                self.root.eval('tk::PlaceWindow . center')
+            except:
+                pass
         
         # Variables
         self.license_key = tk.StringVar()
@@ -9796,19 +9881,39 @@ def show_terms_acceptance_dialog():
     terms_dialog.resizable(False, False)
     terms_dialog.grab_set()  # Make modal
     
-    # Ensure dialog is visible and on top
-    terms_dialog.lift()
-    terms_dialog.attributes('-topmost', True)
-    terms_dialog.after_idle(lambda: terms_dialog.attributes('-topmost', False))
+    # Ensure dialog is visible and on top - enhanced visibility
+    try:
+        terms_dialog.lift()
+        terms_dialog.attributes('-topmost', True)
+        terms_dialog.focus_force()
+        # Keep on top briefly, then allow normal stacking
+        terms_dialog.after(100, lambda: terms_dialog.attributes('-topmost', False))
+        # Force window to front again after a moment
+        terms_dialog.after(200, lambda: terms_dialog.lift())
+    except Exception as e:
+        logger.warning(f"Could not set terms dialog attributes: {e}")
     
-    # Center the dialog
-    terms_dialog.update_idletasks()
-    x = (terms_dialog.winfo_screenwidth() - 700) // 2
-    y = (terms_dialog.winfo_screenheight() - 550) // 2
-    terms_dialog.geometry(f"+{x}+{y}")
+    # Center the dialog with robust error handling
+    try:
+        terms_dialog.update_idletasks()
+        screen_width = terms_dialog.winfo_screenwidth()
+        screen_height = terms_dialog.winfo_screenheight()
+        window_width = 700
+        window_height = 550
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        # Ensure dialog is on screen
+        x = max(0, min(x, screen_width - window_width))
+        y = max(0, min(y, screen_height - window_height))
+        terms_dialog.geometry(f"{window_width}x{window_height}+{x}+{y}")
+    except Exception as e:
+        logger.warning(f"Could not center terms dialog: {e}")
     
     # Ensure dialog is focused
-    terms_dialog.focus_force()
+    try:
+        terms_dialog.focus_force()
+    except:
+        pass
     terms_dialog.update()
     logger.info("Terms dialog window created and should be visible")
     
@@ -10116,6 +10221,59 @@ def setup_application_environment():
     except Exception as e:
         logger.warning(f"Environment setup warning: {e}")
 
+def handle_protection_violation(violation):
+    """
+    Handle protection violations with user-friendly error dialogs and logging
+    
+    Args:
+        violation: ProtectionViolation exception instance
+    """
+    if violation is None:
+        logger.error("[PROTECTION] Received None violation - cannot handle")
+        return
+    
+    error_msg = f"Protection Violation: {violation.reason}"
+    error_code = getattr(violation, 'error_code', 'UNKNOWN')
+    severity = getattr(violation, 'severity', 'critical')
+    
+    logger.critical(f"[PROTECTION] {error_msg} (Code: {error_code}, Severity: {severity})")
+    
+    if severity == "critical":
+        user_message = f"""Security Protection Violation
+
+Error Code: {error_code}
+Reason: {violation.reason}
+
+The application has detected a security violation and must terminate.
+
+This may occur if:
+• The application is running from an unauthorized location
+• Security software or debugging tools are interfering
+• The application files have been modified
+
+For support, please contact:
+{__contact__}
+
+Please provide the error code when contacting support.
+Log file location: {LOG_FILE}"""
+        
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("Security Violation", user_message)
+            root.destroy()
+        except Exception as e:
+            logger.error(f"Failed to show protection violation dialog: {e}")
+            print(f"\n{'='*60}")
+            print("SECURITY VIOLATION")
+            print(f"{'='*60}")
+            print(user_message)
+            print(f"{'='*60}\n")
+        
+        sys.exit(1)
+    else:
+        logger.warning(f"[PROTECTION] Warning: {violation.reason} (Code: {error_code})")
+
 def main():
     """Enhanced main application entry point with comprehensive initialization"""
     try:
@@ -10140,6 +10298,12 @@ def main():
             logger.warning("Application will run without commercial protection features")
         else:
             # Compiled executable with protection available - initialize it
+            # Set up protection error callback and logger before initialization
+            if set_protection_error_callback:
+                set_protection_error_callback(handle_protection_violation)
+            if set_protection_logger:
+                set_protection_logger(logger)
+            
             # Initialize protection with robust timeout mechanism
             print("Initializing commercial protection...")
             logger.info("Attempting to initialize commercial protection...")
@@ -10156,6 +10320,9 @@ def main():
                 def init_in_thread():
                     try:
                         protection_result[0] = initialize_protection()
+                    except ProtectionViolation as e:
+                        protection_error[0] = e
+                        handle_protection_violation(e)
                     except Exception as e:
                         protection_error[0] = e
                     finally:
@@ -10176,6 +10343,9 @@ def main():
                     if protection_error[0]:
                         # Error occurred during initialization
                         e = protection_error[0]
+                        if ProtectionViolation and isinstance(e, ProtectionViolation):
+                            handle_protection_violation(e)
+                            return
                         logger.error(f"Protection initialization failed: {e}")
                         logger.error(f"Error type: {type(e).__name__}")
                         import traceback
@@ -10201,6 +10371,9 @@ def main():
             except KeyboardInterrupt:
                 print("\n⚠ Interrupted during protection initialization")
                 raise
+            except ProtectionViolation as e:
+                handle_protection_violation(e)
+                return
             except Exception as e:
                 logger.error(f"Unexpected error during protection initialization: {e}")
                 logger.error(f"Error type: {type(e).__name__}")
