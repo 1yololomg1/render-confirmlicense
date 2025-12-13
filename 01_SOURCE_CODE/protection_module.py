@@ -28,30 +28,74 @@ import psutil
 import threading
 from ctypes import wintypes
 import platform
+from typing import Optional, Callable
+
+class ProtectionViolation(Exception):
+    """Exception raised when protection mechanisms detect a security violation"""
+    def __init__(self, reason: str, error_code: str, severity: str = "critical"):
+        """
+        Initialize protection violation
+        
+        Args:
+            reason: Human-readable reason for violation
+            error_code: Machine-readable error code for diagnostics
+            severity: "critical" (must terminate) or "warning" (log but continue)
+        """
+        super().__init__(reason)
+        self.reason = reason
+        self.error_code = error_code
+        self.severity = severity
+        self.timestamp = time.time()
 
 class CommercialProtection:
     """Advanced protection mechanisms for commercial software"""
     
+    def __init__(self, error_callback: Optional[Callable[[ProtectionViolation], None]] = None, 
+                 logger=None):
+        """
+        Initialize protection system
+        
+        Args:
+            error_callback: Optional callback function to handle protection violations.
+                          If provided, violations will call this instead of raising exceptions.
+            logger: Optional logger instance. If provided, will use for logging instead of debug file.
+        """
+        self.start_time = time.time()
+        self.original_argv = sys.argv.copy()
+        self.protection_active = True
+        self.debug_mode = os.getenv("CONFIRM_DEBUG", "false").lower() == "true"
+        self.error_callback = error_callback
+        self.logger = logger
+        self.build_mode = self._detect_build_environment()
+        self.vm_detected = False
+        self.violation_count = 0
+        
+        self._log_debug(f"Protection module initialized - Build mode: {self.build_mode}")
+        
+        if not self.build_mode:
+            try:
+                self._setup_protection()
+            except ProtectionViolation as e:
+                self._handle_violation(e)
+        else:
+            self._log_debug("Running in build environment - skipping protection setup")
+    
     def _detect_build_environment(self):
         """Detect if we're running in a build environment"""
         try:
-            # Check for common build environment indicators
             build_indicators = [
                 "nuitka", "pyinstaller", "cx_freeze", "py2exe",
                 "build", "dist", "setup.py", "pip", "conda"
             ]
 
-            # Check command line arguments
             for arg in sys.argv:
                 if any(indicator in arg.lower() for indicator in build_indicators):
                     return True
 
-            # Check environment variables
             env_vars = os.environ.keys()
             if any(indicator in var.lower() for indicator in build_indicators for var in env_vars):
                 return True
 
-            # Check if we're running from a temporary build directory
             current_path = os.path.abspath(sys.executable)
             if any(indicator in current_path.lower() for indicator in ["temp", "build", "dist", "_mei"]):
                 return True
@@ -61,31 +105,53 @@ class CommercialProtection:
         except Exception as e:
             self._log_debug(f"Error detecting build environment: {e}")
             return False
-
-    def __init__(self):
-        self.start_time = time.time()
-        self.original_argv = sys.argv.copy()
-        self.protection_active = True
-        self.debug_mode = os.getenv("CONFIRM_DEBUG", "false").lower() == "true"
-        self.build_mode = self._detect_build_environment()
-        self._log_debug(f"Protection module initialized - Build mode: {self.build_mode}")
-        if not self.build_mode:
-            self._setup_protection()
-        else:
-            self._log_debug("Running in build environment - skipping protection setup")
     
     def _log_debug(self, message):
         """Log debug messages with timestamp"""
         if self.debug_mode:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             debug_message = f"[PROTECTION DEBUG {timestamp}] {message}"
-            print(debug_message, file=sys.stderr)
+            
+            if self.logger:
+                self.logger.debug(debug_message)
+            else:
+                print(debug_message, file=sys.stderr)
+                try:
+                    with open("protection_debug.log", "a") as f:
+                        f.write(debug_message + "\n")
+                except:
+                    pass
+    
+    def _log_error(self, message):
+        """Log error messages"""
+        if self.logger:
+            self.logger.error(f"[PROTECTION] {message}")
+        else:
             try:
                 with open("protection_debug.log", "a") as f:
-                    f.write(debug_message + "\n")
+                    f.write(f"[PROTECTION ERROR] {message}\n")
             except:
                 pass
-
+    
+    def _handle_violation(self, violation: ProtectionViolation):
+        """Handle a protection violation"""
+        self.violation_count += 1
+        error_msg = f"Protection violation [{violation.error_code}]: {violation.reason}"
+        
+        self._log_error(error_msg)
+        
+        if violation.severity == "critical":
+            if self.error_callback:
+                try:
+                    self.error_callback(violation)
+                except Exception as e:
+                    self._log_error(f"Error callback failed: {e}")
+                    raise violation
+            else:
+                raise violation
+        else:
+            self._log_debug(f"Non-critical violation (continuing): {violation.reason}")
+    
     def _setup_protection(self):
         """Initialize all protection mechanisms"""
         self._log_debug("Starting protection setup")
@@ -95,43 +161,83 @@ class CommercialProtection:
         self._runtime_monitoring()
         self._log_debug("Protection setup completed")
     
-    def _anti_debugging(self):
-        """Implement anti-debugging measures"""
+    def _scan_processes_with_timeout(self, process_names, max_checks=200, timeout_seconds=5):
+        """
+        Scan running processes with timeout protection
+        
+        Args:
+            process_names: Set of process names to check for
+            max_checks: Maximum number of processes to check
+            timeout_seconds: Maximum time to spend scanning
+            
+        Returns:
+            List of matching process names found
+        """
+        found = []
+        start_time = time.time()
+        checked_count = 0
+        
         try:
-            # Check for common debuggers
-            debugger_processes = [
-                'ollydbg.exe', 'x64dbg.exe', 'windbg.exe', 'ida.exe', 'ida64.exe',
-                'ghidra.exe', 'radare2.exe', 'cheatengine.exe', 'processhacker.exe',
-                'procmon.exe', 'wireshark.exe', 'fiddler.exe', 'charles.exe'
-            ]
-            
-            # Optimized: Use a set for faster lookups and limit iterations
-            debugger_set = set(debugger_processes)
-            checked_count = 0
-            max_checks = 500  # Limit to prevent hanging on systems with many processes
-            
             for proc in psutil.process_iter(['pid', 'name']):
                 if checked_count >= max_checks:
-                    break  # Prevent excessive scanning
+                    break
+                if time.time() - start_time > timeout_seconds:
+                    self._log_debug(f"Process scan timed out after {timeout_seconds}s")
+                    break
+                    
                 checked_count += 1
                 try:
                     proc_name = proc.info.get('name', '').lower()
-                    if proc_name in debugger_set:
-                        self._terminate_application("Debugging software detected")
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    if proc_name in process_names:
+                        found.append(proc_name)
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
+        except Exception as e:
+            self._log_debug(f"Error during process scan: {e}")
+        
+        return found
+    
+    def _anti_debugging(self):
+        """Implement anti-debugging measures"""
+        try:
+            debugger_processes = set([
+                'ollydbg.exe', 'x64dbg.exe', 'windbg.exe', 'ida.exe', 'ida64.exe',
+                'ghidra.exe', 'radare2.exe', 'cheatengine.exe', 'processhacker.exe',
+                'procmon.exe', 'wireshark.exe', 'fiddler.exe', 'charles.exe'
+            ])
             
-            # Check for debugger attachment
+            found_debuggers = self._scan_processes_with_timeout(
+                debugger_processes, 
+                max_checks=300, 
+                timeout_seconds=5
+            )
+            
+            if found_debuggers:
+                violation = ProtectionViolation(
+                    reason=f"Debugging software detected: {', '.join(found_debuggers)}",
+                    error_code="PROT-001",
+                    severity="critical"
+                )
+                self._handle_violation(violation)
+            
             if self._is_debugger_present():
-                self._terminate_application("Debugger attachment detected")
+                violation = ProtectionViolation(
+                    reason="Debugger attachment detected",
+                    error_code="PROT-002",
+                    severity="critical"
+                )
+                self._handle_violation(violation)
                 
-        except Exception:
-            pass  # Fail silently to avoid detection
+        except ProtectionViolation:
+            raise
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError) as e:
+            self._log_debug(f"Exception in anti-debugging check: {e}")
+        except Exception as e:
+            self._log_debug(f"Unexpected exception in anti-debugging check: {e}")
     
     def _is_debugger_present(self):
         """Check if debugger is attached to current process"""
         try:
-            # Windows-specific debugger detection
             if platform.system() == "Windows":
                 kernel32 = ctypes.windll.kernel32
                 return kernel32.IsDebuggerPresent() != 0
@@ -143,90 +249,96 @@ class CommercialProtection:
         """Implement anti-tampering measures"""
         try:
             self._log_debug("Starting anti-tampering checks")
-            # Check if running from expected location
             current_path = os.path.abspath(sys.executable)
             self._log_debug(f"Current executable path: {current_path}")
 
-            # Skip path validation during build processes
             if not self.build_mode:
                 if not self._is_valid_execution_path(current_path):
-                    self._log_debug("Invalid execution path detected - terminating")
-                    self._terminate_application("Invalid execution path")
+                    violation = ProtectionViolation(
+                        reason=f"Invalid execution path: {current_path}",
+                        error_code="PROT-003",
+                        severity="critical"
+                    )
+                    self._handle_violation(violation)
 
-                # Verify file integrity
                 if not self._verify_file_integrity():
-                    self._log_debug("File integrity violation detected - terminating")
-                    self._terminate_application("File integrity violation")
+                    violation = ProtectionViolation(
+                        reason="File integrity violation detected",
+                        error_code="PROT-004",
+                        severity="critical"
+                    )
+                    self._handle_violation(violation)
             else:
                 self._log_debug("Build mode detected - skipping path validation")
 
             self._log_debug("Anti-tampering checks passed")
 
-        except Exception as e:
+        except ProtectionViolation:
+            raise
+        except (OSError, PermissionError) as e:
             self._log_debug(f"Exception in anti-tampering: {e}")
-            pass
+        except Exception as e:
+            self._log_debug(f"Unexpected exception in anti-tampering: {e}")
     
     def _is_valid_execution_path(self, path):
-        """Validate execution path - lenient for development, strict for production"""
-        # If running from Python source (not frozen/compiled), allow any path (development mode)
-        # PyInstaller sets sys.frozen, Nuitka sets __compiled__
+        """Validate execution path - professional approach with reasonable restrictions"""
         is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
         if not is_compiled:
             return True
         
-        # For PyInstaller temp directory, always allow (check this first)
         if "_MEI" in path:
             return True
-            return True
         
-        # For compiled .exe, check if in standard installation locations
-        # Use comprehensive list of valid paths
         valid_paths = [
             r"C:\Program Files",
             r"C:\Program Files (x86)",
             os.path.expanduser(r"~\AppData\Local"),
             os.path.expanduser(r"~\AppData\Local\Programs"),
+            os.path.expanduser(r"~\AppData\Roaming"),
             os.path.expanduser(r"~\Desktop"),
             os.path.expanduser(r"~\Downloads"),
             os.path.expanduser(r"~\Documents"),
-            # Allow execution from development/test directories
+            os.path.expanduser(r"~\OneDrive"),
             "CONFIRM_Distribution_Optimized",
             "OneDrive",
         ]
         
-        # Check if path contains any valid path segment
         path_normalized = path.replace("\\", "/").lower()
         for valid_path in valid_paths:
             valid_normalized = str(valid_path).replace("\\", "/").lower()
             if valid_normalized in path_normalized or path_normalized.startswith(valid_normalized):
                 return True
         
-        # For Nuitka compiled executables, check for Nuitka-specific paths
-        # Nuitka creates executables directly, not in temp directories
-        # When frozen (either PyInstaller or Nuitka), be lenient
         is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
         if is_compiled:
-            # Allow execution from current directory for frozen executables
-            # This handles cases where users run from custom locations
             current_dir = os.getcwd().replace("\\", "/").lower()
             if current_dir in path_normalized:
                 return True
         
-        # If we get here, it's an unexpected location for a compiled .exe
+            path_drive = os.path.splitdrive(path)[0].lower()
+            if path_drive:
+                valid_drives = ['c:', 'd:', 'e:', 'f:', 'g:', 'h:', 'i:', 'j:', 'k:', 'l:', 'm:', 'n:', 'o:', 'p:', 'q:', 'r:', 's:', 't:', 'u:', 'v:', 'w:', 'x:', 'y:', 'z:']
+                if path_drive in valid_drives:
+                    suspicious_segments = ['temp', 'tmp', 'windows/system32', 'windows/syswow64']
+                    if not any(sus in path_normalized for sus in suspicious_segments):
+                        return True
+        
         return False
     
     def _verify_file_integrity(self):
         """Verify executable file integrity"""
         try:
-            # Simple integrity check - in production, use cryptographic signatures
             exe_path = sys.executable
             if os.path.exists(exe_path):
                 stat = os.stat(exe_path)
-                # Check file size is reasonable (not too small or too large)
                 if stat.st_size < 1024 * 1024 or stat.st_size > 500 * 1024 * 1024:
                     return False
             return True
-        except Exception:
+        except (OSError, PermissionError) as e:
+            self._log_debug(f"Exception in file integrity check: {e}")
+            return False
+        except Exception as e:
+            self._log_debug(f"Unexpected exception in file integrity check: {e}")
             return False
     
     def _integrity_check(self):
@@ -236,21 +348,30 @@ class CommercialProtection:
             return
 
         try:
-            # Check for memory patching
             if self._detect_memory_patching():
-                self._terminate_application("Memory patching detected")
+                violation = ProtectionViolation(
+                    reason="Memory patching detected",
+                    error_code="PROT-005",
+                    severity="critical"
+                )
+                self._handle_violation(violation)
 
-            # Check for API hooking
             if self._detect_api_hooking():
-                self._terminate_application("API hooking detected")
+                violation = ProtectionViolation(
+                    reason="API hooking detected",
+                    error_code="PROT-006",
+                    severity="critical"
+                )
+                self._handle_violation(violation)
 
-        except Exception:
-            pass
+        except ProtectionViolation:
+            raise
+        except Exception as e:
+            self._log_debug(f"Exception in integrity check: {e}")
     
     def _detect_memory_patching(self):
         """Detect memory patching attempts"""
         try:
-            # Simple heuristic - check if critical functions are modified
             import inspect
             frame = inspect.currentframe()
             if frame and frame.f_code.co_code != frame.f_code.co_code:
@@ -262,26 +383,19 @@ class CommercialProtection:
     def _detect_api_hooking(self):
         """Detect API hooking attempts"""
         try:
-            # Check for suspicious DLLs
             suspicious_dlls = set([
                 'detours.dll', 'easyhook.dll', 'minhook.dll', 'polyhook.dll'
             ])
             
-            checked_count = 0
-            max_checks = 200  # Limit checks for performance
+            found_dlls = self._scan_processes_with_timeout(
+                suspicious_dlls,
+                max_checks=150,
+                timeout_seconds=3
+            )
             
-            for proc in psutil.process_iter(['pid', 'name']):
-                if checked_count >= max_checks:
-                    break
-                checked_count += 1
-                try:
-                    proc_name = proc.info.get('name', '').lower()
-                    if proc_name in suspicious_dlls:
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            return False
-        except Exception:
+            return len(found_dlls) > 0
+        except Exception as e:
+            self._log_debug(f"Exception in API hooking detection: {e}")
             return False
     
     def _runtime_monitoring(self):
@@ -293,61 +407,72 @@ class CommercialProtection:
         def monitor():
             while self.protection_active:
                 try:
-                    # Check for virtual machines
-                    if self._detect_virtual_machine():
-                        self._terminate_application("Virtual machine detected")
+                    vm_detected = self._detect_virtual_machine()
+                    if vm_detected and not self.vm_detected:
+                        self.vm_detected = True
+                        violation = ProtectionViolation(
+                            reason="Virtual machine environment detected (warning only)",
+                            error_code="PROT-007",
+                            severity="warning"
+                        )
+                        self._handle_violation(violation)
 
-                    # Check for sandbox environments
                     if self._detect_sandbox():
-                        self._terminate_application("Sandbox environment detected")
+                        violation = ProtectionViolation(
+                            reason="Sandbox environment detected",
+                            error_code="PROT-008",
+                            severity="critical"
+                        )
+                        self._handle_violation(violation)
 
-                    # Check execution time (prevent automated analysis)
-                    if time.time() - self.start_time > 3600:  # 1 hour limit
-                        self._terminate_application("Execution time exceeded")
+                    if time.time() - self.start_time > 3600:
+                        violation = ProtectionViolation(
+                            reason="Execution time exceeded maximum allowed duration",
+                            error_code="PROT-009",
+                            severity="critical"
+                        )
+                        self._handle_violation(violation)
 
-                    time.sleep(30)  # Check every 30 seconds
-                except Exception:
+                    time.sleep(30)
+                except ProtectionViolation:
+                    # Violation was already handled by _handle_violation before it was raised
+                    # No need to handle again - just exit the monitor loop
+                    break
+                except Exception as e:
+                    self._log_debug(f"Exception in runtime monitor: {e}")
                     break
 
-        # Start monitoring in background thread
         monitor_thread = threading.Thread(target=monitor, daemon=True)
         monitor_thread.start()
     
     def _detect_virtual_machine(self):
-        """Detect virtual machine environment"""
+        """Detect virtual machine environment - returns True if VM detected"""
         try:
-            # Check for VM-specific processes
             vm_processes = set([
                 'vmtoolsd.exe', 'vmwaretray.exe', 'vmwareuser.exe',
                 'vboxservice.exe', 'vboxtray.exe', 'qemu-ga.exe', 'xenservice.exe'
             ])
             
-            checked_count = 0
-            max_checks = 200  # Limit checks for performance
+            found_vm_processes = self._scan_processes_with_timeout(
+                vm_processes,
+                max_checks=150,
+                timeout_seconds=3
+            )
             
-            for proc in psutil.process_iter(['pid', 'name']):
-                if checked_count >= max_checks:
-                    break
-                checked_count += 1
-                try:
-                    proc_name = proc.info.get('name', '').lower()
-                    if proc_name in vm_processes:
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+            if found_vm_processes:
+                return True
             
-            # Check system information
             system_info = platform.platform().lower()
             vm_indicators = ['vmware', 'virtualbox', 'qemu', 'xen', 'hyper-v']
             
             return any(indicator in system_info for indicator in vm_indicators)
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"Exception in VM detection: {e}")
             return False
     
     def _detect_sandbox(self):
         """Detect sandbox environment"""
         try:
-            # Check for sandbox-specific processes and analysis tools
             sandbox_processes = set([
                 'sandboxie.exe', 'cuckoo.exe', 'wireshark.exe',
                 'procmon.exe', 'regmon.exe', 'filemon.exe'
@@ -358,44 +483,22 @@ class CommercialProtection:
                 'x64dbg.exe', 'ollydbg.exe', 'windbg.exe'
             ])
             
-            # Combined check to avoid iterating twice
             all_suspicious = sandbox_processes | analysis_tools
-            checked_count = 0
-            max_checks = 300  # Limit checks for performance
             
-            for proc in psutil.process_iter(['pid', 'name']):
-                if checked_count >= max_checks:
-                    break
-                checked_count += 1
-                try:
-                    proc_name = proc.info.get('name', '').lower()
-                    if proc_name in all_suspicious:
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+            found_processes = self._scan_processes_with_timeout(
+                all_suspicious,
+                max_checks=200,
+                timeout_seconds=4
+            )
             
+            return len(found_processes) > 0
+        except Exception as e:
+            self._log_debug(f"Exception in sandbox detection: {e}")
             return False
-        except Exception:
-            return False
-    
-    def _terminate_application(self, reason):
-        """Safely terminate the application"""
-        try:
-            # Log the reason (in production, send to server)
-            self.protection_active = False
-            
-            # Clear sensitive data from memory
-            self._clear_sensitive_data()
-            
-            # Terminate process
-            os._exit(1)
-        except Exception:
-            os._exit(1)
     
     def _clear_sensitive_data(self):
         """Clear sensitive data from memory"""
         try:
-            # Overwrite sensitive variables
             if hasattr(self, 'start_time'):
                 self.start_time = 0
             if hasattr(self, 'original_argv'):
@@ -409,18 +512,17 @@ class CommercialProtection:
             if not license_data or not isinstance(license_data, dict):
                 return False
             
-            # Check for required fields
             required_fields = ['license_key', 'computer_id', 'expiry']
             if not all(field in license_data for field in required_fields):
                 return False
             
-            # Validate license key format
             license_key = license_data.get('license_key', '')
             if not self._is_valid_license_format(license_key):
                 return False
             
             return True
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"Exception in license integrity validation: {e}")
             return False
     
     def _is_valid_license_format(self, license_key):
@@ -429,13 +531,13 @@ class CommercialProtection:
             if not license_key or len(license_key) < 10:
                 return False
             
-            # Basic format validation
             parts = license_key.split(':')
             if len(parts) != 3:
                 return False
             
             return True
-        except Exception:
+        except Exception as e:
+            self._log_debug(f"Exception in license format validation: {e}")
             return False
     
     def cleanup(self):
@@ -445,12 +547,36 @@ class CommercialProtection:
 
 # Global protection instance
 _protection_instance = None
+_error_callback = None
+_logger = None
+
+def set_protection_error_callback(callback: Callable[[ProtectionViolation], None]):
+    """Set callback function for handling protection violations"""
+    global _error_callback
+    _error_callback = callback
+
+def set_protection_logger(logger):
+    """Set logger instance for protection module"""
+    global _logger
+    _logger = logger
 
 def initialize_protection():
     """Initialize commercial protection"""
     global _protection_instance
     if _protection_instance is None:
-        _protection_instance = CommercialProtection()
+        try:
+            _protection_instance = CommercialProtection(
+                error_callback=_error_callback,
+                logger=_logger
+            )
+        except ProtectionViolation as e:
+            if _error_callback:
+                try:
+                    _error_callback(e)
+                except Exception as callback_error:
+                    if _logger:
+                        _logger.error(f"Error callback failed: {callback_error}")
+            raise
     return _protection_instance
 
 def cleanup_protection():
