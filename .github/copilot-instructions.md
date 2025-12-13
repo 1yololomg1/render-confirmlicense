@@ -191,34 +191,36 @@ Note: The server-side components (test-*.js files) and HTML files are primarily 
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The system implements a commercial software licensing solution through three primary components:
+The system implements a comprehensive software licensing solution through two primary business components:
 
 ## License Protection Core
-Located in `01_SOURCE_CODE/protection_module.py`, this component handles runtime security and license validation:
-- Hardware-based license binding mechanisms
-- Anti-debugging and tampering detection
-- Virtual environment detection
-- Machine fingerprinting
-- Runtime integrity verification
-Importance Score: 85
+**Path**: 01_SOURCE_CODE/protection_module.py
+**Importance**: 85/100
 
-## License Administration
-Located in `DOCUMENTATION_AND_NOTES/license_admin_secure.html`, manages the license lifecycle:
-- Multi-tier license validation with server-first approach
-- Machine binding enforcement and status tracking
-- License revocation workflows
-- Time-based expiration handling
-Importance Score: 75
+Implements multi-layered license protection mechanisms:
+- Machine-specific fingerprinting and binding validation
+- Runtime integrity monitoring
+- Anti-debugging protection
+- VM/sandbox detection
+- License validation workflow with format verification and expiration enforcement
 
-## License Mobility Control
-Located in `01_SOURCE_CODE/admin_unbind_license.py`, handles license transfer operations:
-- Secure unbinding procedures
-- Machine state management
-- Reactivation workflows
-- Audit trail maintenance
-Importance Score: 65
+## License Administration System
+**Path**: DOCUMENTATION_AND_NOTES/license_admin_secure.html
+**Importance**: 75/100
 
-The system prioritizes software intellectual property protection while maintaining license flexibility through hardware binding, multi-layer security, and controlled license mobility features.
+Handles secure license management through:
+- Two-factor authenticated admin access
+- Server-first validation with Firebase fallback
+- License binding/unbinding rules
+- Status transition management (active/revoked/reactivated)
+- Usage monitoring with duplicate detection
+- Automated revocation based on usage patterns
+
+The system's core value lies in the interaction between these components, creating a secure licensing solution with:
+- Multi-layered protection against tampering
+- Comprehensive license lifecycle management
+- Automated monitoring and enforcement
+- Cross-validated machine binding
 
 $END$
 

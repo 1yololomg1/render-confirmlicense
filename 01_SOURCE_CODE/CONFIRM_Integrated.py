@@ -614,11 +614,18 @@ def check_license_with_fingerprint(license_key):
         return {"valid": False, "reason": str(sec_err)}
 
     except requests.exceptions.Timeout:
-        logger.error("License validation timeout - checking offline grace period")
+        logger.error(f"License validation timeout after {NETWORK_REQUEST_TIMEOUT}s - server may be unreachable")
+        logger.error("Possible causes: slow network, firewall blocking, or server issues")
         return check_offline_grace_period()
     
-    except requests.exceptions.ConnectionError:
-        logger.error("License validation connection failed - checking offline grace period")
+    except requests.exceptions.SSLError as e:
+        logger.error(f"SSL/TLS error during license validation: {e}")
+        logger.error("Possible causes: certificate issues, antivirus interfering, or proxy problems")
+        return {"valid": False, "reason": "SSL/security error - check network configuration"}
+    
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"License validation connection failed: {e}")
+        logger.error("Possible causes: no internet, firewall blocking, DNS issues, or server down")
         return check_offline_grace_period()
     
     except requests.exceptions.RequestException as req_error:
@@ -825,12 +832,41 @@ def validate_license_activation():
     print("If you don't see it, check if it's behind other windows.")
     print("=" * 60 + "\n")
     
-    # Try to get license through dialog
+    # Try to get license through dialog with enhanced error handling
+    dialog = None
     try:
+        # Quick test if tkinter can create windows
+        test_root = tk.Tk()
+        test_root.withdraw()
+        test_root.destroy()
+        
         dialog = LicenseDialog()
         logger.info("License dialog created, starting mainloop...")
+        
+        # Show helpful message to console in case dialog is hidden
+        print("\n" + "=" * 60)
+        print("LICENSE DIALOG SHOULD BE VISIBLE")
+        print("If you don't see it, check if it's behind other windows.")
+        print("The dialog window should appear now.")
+        print("=" * 60 + "\n")
+        
         dialog.root.mainloop()
         logger.info("License dialog mainloop completed")
+    except tk.TclError as e:
+        logger.error(f"Tkinter error - GUI display may not be available: {e}")
+        logger.error("This may occur on headless systems or with display server issues")
+        # Try to show error dialog, but if tkinter is broken, just log
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            messagebox.showerror("License Dialog Error", 
+                               f"Failed to show license dialog:\n\n{str(e)}\n\n"
+                               f"Please check the log file: {LOG_FILE}")
+            root.destroy()
+        except:
+            print(f"FATAL: Cannot display license dialog: {e}")
+            print(f"Please check log file: {LOG_FILE}")
+        return None
     except Exception as e:
         logger.error(f"Failed to show license dialog: {e}")
         logger.error(f"Error type: {type(e).__name__}")
@@ -10322,7 +10358,9 @@ def main():
                         protection_result[0] = initialize_protection()
                     except ProtectionViolation as e:
                         protection_error[0] = e
-                        handle_protection_violation(e)
+                        # Don't call handle_protection_violation here - it calls sys.exit(1)
+                        # which only exits daemon threads, not the main process
+                        # Let the main thread handle it properly
                     except Exception as e:
                         protection_error[0] = e
                     finally:
