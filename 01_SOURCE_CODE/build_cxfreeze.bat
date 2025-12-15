@@ -209,8 +209,10 @@ echo ========================================
 echo.
 
 REM Find and display the output folder
+set EXE_FOUND=0
 for /d %%i in (build\exe.*) do (
     set OUTPUT_DIR=%%i
+    set EXE_FOUND=1
     echo Output folder: %%i
     echo.
     echo ========================================
@@ -294,6 +296,62 @@ for /d %%i in (build\exe.*) do (
     echo ========================================
 )
 
+REM Fallback: If for loop didn't find anything, try to find it manually
+if !EXE_FOUND!==0 (
+    echo.
+    echo ========================================
+    echo WARNING: Could not auto-detect output folder
+    echo ========================================
+    echo.
+    echo Searching for CONFIRM.exe...
+    echo.
+    
+    REM Try common cx_Freeze output patterns
+    if exist "build\exe.win-amd64-3.11\CONFIRM.exe" (
+        echo [FOUND] build\exe.win-amd64-3.11\CONFIRM.exe
+        set OUTPUT_DIR=build\exe.win-amd64-3.11
+        goto :found_exe
+    )
+    
+    if exist "build\exe.win-amd64-3.10\CONFIRM.exe" (
+        echo [FOUND] build\exe.win-amd64-3.10\CONFIRM.exe
+        set OUTPUT_DIR=build\exe.win-amd64-3.10
+        goto :found_exe
+    )
+    
+    if exist "build\exe.win-amd64-3.9\CONFIRM.exe" (
+        echo [FOUND] build\exe.win-amd64-3.9\CONFIRM.exe
+        set OUTPUT_DIR=build\exe.win-amd64-3.9
+        goto :found_exe
+    )
+    
+    REM Search recursively
+    for /r build %%f in (CONFIRM.exe) do (
+        if exist "%%f" (
+            echo [FOUND] %%f
+            set OUTPUT_DIR=%%~dpf
+            goto :found_exe
+        )
+    )
+    
+    echo [ERROR] CONFIRM.exe not found in build directory!
+    echo.
+    echo Please check:
+    echo   1. Build completed without errors
+    echo   2. Check build\exe.win-amd64-* directories manually
+    echo   3. Review error messages above
+    echo.
+    goto :end_script
+    
+    :found_exe
+    echo.
+    echo Output folder: !OUTPUT_DIR!
+    echo Full path: !OUTPUT_DIR!\CONFIRM.exe
+    for %%f in ("!OUTPUT_DIR!\CONFIRM.exe") do echo      Size: %%~zf bytes
+    echo.
+)
+
+:end_script
 echo.
 echo Script completed.
 echo.
