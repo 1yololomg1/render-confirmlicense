@@ -1,5 +1,5 @@
 ---
-description: Defines security and protection mechanisms for software licensing system including anti-tampering and validation workflows
+description: Defines security measures for license protection, tampering detection, and validation workflows
 ---
 
 # === USER INSTRUCTIONS ===
@@ -319,41 +319,42 @@ $END$
 
 # security-implementation
 
-## Anti-Tampering System (01_SOURCE_CODE/protection_module.py)
-Importance Score: 90/100
+## Core Protection Layer (Score: 90/100)
+`01_SOURCE_CODE/protection_module.py`
 
-Multi-layered protection architecture:
-- Machine fingerprinting and hardware binding validation
-- Runtime integrity monitoring for license enforcement
-- Anti-debugging mechanisms focused on license protection
-- Virtual machine and sandbox detection system
+### Anti-Tampering System
+- Process monitoring system detects and blocks known debugger applications
+- Runtime integrity validation identifies memory patching attempts
+- Virtual machine detection with configurable severity responses:
+  - Sandbox environment identification
+  - VM platform fingerprinting
+  - Customizable action triggers based on detection
 
-## License Validation Security (01_SOURCE_CODE/protection_module.py)
-Importance Score: 85/100
+### License Validation Architecture
+- Three-part license structure with cryptographic validation
+- Machine-specific binding enforced through path restrictions
+- Execution duration monitoring with configurable time limits
+- Environment-specific protection levels (development/production)
 
-Secure validation workflow:
-- License format cryptographic verification
-- Machine binding cross-validation
-- Multi-stage security checks for tampering attempts
-- Expiration enforcement with tampering detection
+## License Security Administration (Score: 85/100)
+`DOCUMENTATION_AND_NOTES/license_admin_secure.html`
 
-## Administrative Security (DOCUMENTATION_AND_NOTES/license_admin_secure.html)
-Importance Score: 80/100
+### Authentication Framework
+- Two-tier authentication implementation:
+  - Primary secure server validation
+  - Firebase-based fallback authentication
+- Machine binding/unbinding validation rules
+- State transition security controls:
+  - Active → Revoked
+  - Revoked → Reactivated
+  - Validation checks at each transition point
 
-Access control implementation:
-- Two-factor authentication for administrative functions
-- Server-first validation architecture with Firebase fallback
-- Secure license binding/unbinding rules
-- Automated security triggers for suspicious activity
-
-## Machine Detection (01_SOURCE_CODE/protection_module.py)
-Importance Score: 75/100
-
-Protection mechanisms:
-- Duplicate machine detection system
-- Usage pattern analysis for fraud detection
-- Cross-validation of hardware identifiers
-- Automated revocation triggers for security violations
+### Security Policy Controls
+- Dual operational modes with distinct security levels:
+  - Secure server mode with full validation
+  - Fallback mode with reduced privileges
+- License violation monitoring system
+- Secure workflows for activation/deactivation
 
 $END$
 

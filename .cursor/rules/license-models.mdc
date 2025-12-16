@@ -1,5 +1,5 @@
 ---
-description: Documentation for license type data models and hardware binding relationships in licensing systems
+description: Specifications for license types, their data models, and hardware binding relationships
 ---
 
 # === USER INSTRUCTIONS ===
@@ -227,49 +227,42 @@ Revocation requires multi-stage workflow approval
 Location: 01_SOURCE_CODE/license_manager_gui.py
 Importance Score: 75/100
 $END$
+
 # === END USER INSTRUCTIONS ===
 # === END USER INSTRUCTIONS ===
 
 # license-models
 
-### License Type Models
-Importance Score: 85/100
+License model implementation consists of three key components:
 
-The system supports multiple license tiers with distinct validation rules:
-- Professional licenses with machine binding requirements
-- Enterprise licenses with multi-machine allocation support
-- Student/Startup licenses with specific validation constraints
+## Core License Structure (Importance: 90/100)
+- Three-part validation format for license integrity verification
+- Duration-based execution limits tied to specific license states
+- Machine-specific binding restrictions with path validation
 
-### Hardware Binding Model
-Importance Score: 80/100
+## License Types (Importance: 85/100)
+State transition rules:
+- Active -> Revoked -> Reactivated workflow
+- Duration-based extension system for temporary licenses
+- Environment-specific protection levels (dev/prod)
 
-License binding implementation contains:
-- Machine fingerprinting integration with protection layer
-- Multi-factor hardware binding requirements:
-  - Machine-specific identifiers
-  - Runtime environment validation
-  - Cross-validation between binding points
+## Hardware Binding System (Importance: 80/100)
+Machine binding rules:
+- Two-tier validation using server-first authentication
+- Firebase-based fallback verification system
+- Configurable binding/unbinding policies
+- Path-specific hardware restrictions
 
-### Status Transitions
-Importance Score: 75/100
+Key relationships:
+1. License State -> Hardware Binding
+- Active licenses require valid machine binding
+- Revoked status triggers binding invalidation
+- Reactivation requires new hardware validation
 
-License state management includes:
-- Activation workflows with binding validation
-- Revocation processes with binding cleanup
-- Reactivation rules for bound licenses
-- Status transition enforcement through protection module
-
-### Key Components:
-
-1. Protection Module (01_SOURCE_CODE/protection_module.py)
-- Hardware binding validation logic
-- License type-specific security enforcement
-- Machine fingerprint verification
-
-2. License Administration Interface (DOCUMENTATION_AND_NOTES/license_admin_secure.html)
-- License binding management workflows
-- Status transition handling
-- Multi-machine allocation for enterprise licenses
+2. License Type -> Protection Level
+- Production environments enforce strict hardware validation
+- Development mode allows configurable binding restrictions
+- Environment detection affects binding enforcement
 
 $END$
 
