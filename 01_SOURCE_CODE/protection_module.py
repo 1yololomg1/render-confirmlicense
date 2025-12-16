@@ -133,6 +133,17 @@ class CommercialProtection:
             except:
                 pass
     
+    def _log_info(self, message):
+        """Log info messages - always logs regardless of debug_mode"""
+        if self.logger:
+            self.logger.info(f"[PROTECTION] {message}")
+        else:
+            try:
+                with open("protection_debug.log", "a") as f:
+                    f.write(f"[PROTECTION INFO] {message}\n")
+            except:
+                pass
+    
     def _handle_violation(self, violation: ProtectionViolation):
         """Handle a protection violation"""
         self.violation_count += 1
@@ -329,16 +340,40 @@ class CommercialProtection:
         """Verify executable file integrity"""
         try:
             exe_path = sys.executable
-            if os.path.exists(exe_path):
+            self._log_info(f"Verifying file integrity for: {exe_path}")
+            
+            if not os.path.exists(exe_path):
+                self._log_error(f"File integrity check failed: File does not exist at {exe_path}")
+                return False
+            
+            try:
                 stat = os.stat(exe_path)
-                if stat.st_size < 1024 * 1024 or stat.st_size > 500 * 1024 * 1024:
+                file_size = stat.st_size
+                file_size_mb = file_size / (1024 * 1024)
+                self._log_info(f"File exists: True, Size: {file_size_mb:.2f} MB ({file_size} bytes)")
+                
+                min_size = 1024 * 1024  # 1 MB
+                max_size = 500 * 1024 * 1024  # 500 MB
+                
+                if file_size < min_size:
+                    self._log_error(f"File integrity check failed: File size ({file_size_mb:.2f} MB, {file_size} bytes) is below minimum (1 MB)")
                     return False
-            return True
-        except (OSError, PermissionError) as e:
-            self._log_debug(f"Exception in file integrity check: {e}")
-            return False
+                
+                if file_size > max_size:
+                    self._log_error(f"File integrity check failed: File size ({file_size_mb:.2f} MB, {file_size} bytes) exceeds maximum (500 MB)")
+                    return False
+                
+                self._log_info("File integrity check passed: Size is within valid range")
+                return True
+                
+            except (OSError, PermissionError) as e:
+                error_type = type(e).__name__
+                self._log_error(f"File integrity check failed: {error_type} - {str(e)} (Path: {exe_path})")
+                return False
+                
         except Exception as e:
-            self._log_debug(f"Unexpected exception in file integrity check: {e}")
+            error_type = type(e).__name__
+            self._log_error(f"File integrity check failed: Unexpected {error_type} - {str(e)} (Path: {exe_path if 'exe_path' in locals() else 'unknown'})")
             return False
     
     def _integrity_check(self):

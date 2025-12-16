@@ -138,6 +138,7 @@ __contact__ = "info@traceseis.com"
 # Ensure configuration directory exists with robust error handling
 def ensure_config_directory():
     """Create config directory with multiple fallback options"""
+    global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         return True
@@ -145,7 +146,6 @@ def ensure_config_directory():
         # Try fallback to temp directory
         try:
             import tempfile
-            global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE
             fallback_dir = Path(tempfile.gettempdir()) / "CONFIRM_Data"
             fallback_dir.mkdir(parents=True, exist_ok=True)
             CONFIG_DIR = fallback_dir
@@ -3233,11 +3233,16 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                         sheet_name = list(self.analyzer.batch_results.keys())[0]
                         sheet_data = self.analyzer.batch_results[sheet_name]
                         
+                        # Calculate data completeness from neurons
+                        total_neurons = sheet_data.get('total_neurons', 1)
+                        active_neurons = sheet_data.get('active_neurons', 0)
+                        data_completeness = (active_neurons / total_neurons * 100) if total_neurons > 0 else 0
+                        
                         overall_values = [
                             min(sheet_data.get('global_fit', 0) / 100, 1.0),  # Normalize accuracy
                             min(sheet_data.get('cramers_v', 0) * 2, 1.0),     # Scale Cramer's V
-                            min(sheet_data.get('active_neurons', 0) / sheet_data.get('total_neurons', 1), 1.0),
-                            min(sheet_data.get('data_completeness', 0) / 100, 1.0)  # Normalize completeness
+                            min(active_neurons / total_neurons, 1.0),
+                            min(data_completeness / 100, 1.0)  # Normalize completeness
                         ]
                     else:
                         overall_values = [0.5, 0.5, 0.5, 0.5]  # Default values
@@ -3408,8 +3413,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                     # Calculate quality metrics
                     accuracy = sheet_data.get('global_fit', 0)
                     association = sheet_data.get('cramers_v', 0) * 100  # Convert to percentage
-                    utilization = sheet_data.get('active_neurons', 0) / sheet_data.get('total_neurons', 1) * 100
-                    completeness = sheet_data.get('data_completeness', 0)
+                    total_neurons = sheet_data.get('total_neurons', 1)
+                    active_neurons = sheet_data.get('active_neurons', 0)
+                    utilization = (active_neurons / total_neurons * 100) if total_neurons > 0 else 0
+                    completeness = utilization  # Data completeness is the same as utilization
                     
                     # Normalize to percentages that sum to 100
                     total = accuracy + association + utilization + completeness
@@ -4712,21 +4719,55 @@ class StatisticalAnalyzer:
             # Data rows
             for sheet_name, result in self.batch_results.items():
                 if result.get('status') == 'success':
-                    stats = result.get('statistics', {})
                     qc_summary = self.get_chi_square_qc_summary(result)
+                    
+                    # Extract matrix dimensions
+                    matrix_shape = result.get('matrix_shape', (0, 0))
+                    total_rows = matrix_shape[0] if matrix_shape and len(matrix_shape) > 0 else result.get('total_neurons', 0)
+                    total_cols = matrix_shape[1] if matrix_shape and len(matrix_shape) > 1 else 0
+                    
+                    # Calculate data completeness (neuron utilization)
+                    total_neurons = result.get('total_neurons', 0)
+                    active_neurons = result.get('active_neurons', 0)
+                    if total_neurons > 0:
+                        data_completeness = (active_neurons / total_neurons) * 100
+                    else:
+                        data_completeness = 0
+                    
+                    # Get statistical values
+                    global_fit = result.get('global_fit', 0)
+                    cramers_v = result.get('cramers_v', 0)
+                    chi2_p_value = result.get('chi2_p_value', 1.0)
+                    total_observations = result.get('total_observations', 0)
+                    
+                    # Get chi2 from QC summary (it calculates it)
+                    chi2 = qc_summary.get('chi2', 0)
+                    if chi2 == 0 and 'chi2' not in qc_summary:
+                        # Fallback: calculate chi2 if not in QC summary
+                        try:
+                            from scipy.stats import chi2_contingency
+                            matrix = result.get('confusion_matrix')
+                            if matrix is not None:
+                                chi2, _, _, _ = chi2_contingency(matrix.values)
+                        except:
+                            chi2 = 0
+                    
+                    # Use QC summary values if available, otherwise use direct values
+                    accuracy_score = qc_summary.get('accuracy_score', global_fit / 100.0)
+                    p_value = qc_summary.get('p_value', chi2_p_value)
                     
                     row = [
                         sheet_name,
                         "Success",
                         qc_summary.get('qc_grade', 'N/A'),
-                        result.get('total_rows', 'N/A'),
-                        result.get('total_cols', 'N/A'),
-                        f"{result.get('data_completeness', 0):.1f}%" if result.get('data_completeness') else 'N/A',
-                        f"{qc_summary.get('accuracy_score', 0):.2f}",
-                        f"{stats.get('cramers_v', 0):.3f}" if stats.get('cramers_v') else 'N/A',
-                        f"{stats.get('chi2', 0):.2f}" if stats.get('chi2') else 'N/A',
-                        f"{stats.get('p_value', 0):.4f}" if stats.get('p_value') else 'N/A',
-                        stats.get('sample_size', 'N/A'),
+                        total_rows if total_rows > 0 else 'N/A',
+                        total_cols if total_cols > 0 else 'N/A',
+                        f"{data_completeness:.1f}%" if data_completeness > 0 else 'N/A',
+                        f"{accuracy_score:.2f}",
+                        f"{cramers_v:.3f}" if cramers_v else 'N/A',
+                        f"{chi2:.2f}" if chi2 else 'N/A',
+                        f"{p_value:.4f}" if p_value is not None else 'N/A',
+                        total_observations if total_observations > 0 else 'N/A',
                         "; ".join(result.get('warnings', []))
                     ]
                 else:
@@ -4839,9 +4880,17 @@ class StatisticalAnalyzer:
                                     exported_count += 1
                             
                             # Export statistical summary chart
-                            stats = result.get('statistics', {})
-                            if stats:
-                                fig = designer.create_statistical_summary_chart(stats, sheet_name)
+                            # Build stats dict from actual result data
+                            qc_summary = self.get_chi_square_qc_summary(result)
+                            stats_dict = {
+                                'chi2': qc_summary.get('chi2', 0),
+                                'p_value': qc_summary.get('p_value', result.get('chi2_p_value', 1.0)),
+                                'cramers_v': result.get('cramers_v', 0),
+                                'sample_size': result.get('total_observations', 0),
+                                'accuracy': result.get('global_fit', 0) / 100.0
+                            }
+                            if stats_dict.get('sample_size', 0) > 0:
+                                fig = designer.create_statistical_summary_chart(stats_dict, sheet_name)
                                 if fig:  # Check if figure was created successfully
                                     fig.savefig(os.path.join(sheet_dir, f"{safe_sheet_name}_statistics.png"), 
                                               dpi=300, bbox_inches='tight')
@@ -4953,37 +5002,47 @@ class StatisticalAnalyzer:
             # Compare key metrics
             comparisons = []
             
+            # Get QC summaries for both sheets
+            qc1_summary = self.get_chi_square_qc_summary(sheet1_data)
+            qc2_summary = self.get_chi_square_qc_summary(sheet2_data)
+            
             # Sample size comparison
-            size1 = sheet1_data.get('statistics', {}).get('sample_size', 0)
-            size2 = sheet2_data.get('statistics', {}).get('sample_size', 0)
+            size1 = sheet1_data.get('total_observations', 0)
+            size2 = sheet2_data.get('total_observations', 0)
             size_diff = size2 - size1
             size_interp = "Larger dataset" if size_diff > 0 else "Smaller dataset" if size_diff < 0 else "Equal size"
             comparisons.append(["Sample Size", str(size1), str(size2), str(size_diff), size_interp])
             
             # Effect size comparison (Cramer's V)
-            effect1 = sheet1_data.get('statistics', {}).get('cramers_v', 0)
-            effect2 = sheet2_data.get('statistics', {}).get('cramers_v', 0)
+            effect1 = sheet1_data.get('cramers_v', 0)
+            effect2 = sheet2_data.get('cramers_v', 0)
             effect_diff = effect2 - effect1
             effect_interp = "Stronger effect" if effect_diff > 0.1 else "Weaker effect" if effect_diff < -0.1 else "Similar effect"
             comparisons.append(["Effect Size (Cramer's V)", f"{effect1:.3f}", f"{effect2:.3f}", f"{effect_diff:.3f}", effect_interp])
             
-            # Chi-square comparison
-            chi1 = sheet1_data.get('statistics', {}).get('chi2', 0)
-            chi2 = sheet2_data.get('statistics', {}).get('chi2', 0)
+            # Chi-square comparison - get from QC summary
+            chi1 = qc1_summary.get('chi2', 0)
+            chi2 = qc2_summary.get('chi2', 0)
             chi_diff = chi2 - chi1
             chi_interp = "Stronger association" if chi_diff > 10 else "Weaker association" if chi_diff < -10 else "Similar association"
             comparisons.append(["Chi-Square", f"{chi1:.2f}", f"{chi2:.2f}", f"{chi_diff:.2f}", chi_interp])
             
             # P-value comparison
-            p1 = sheet1_data.get('statistics', {}).get('p_value', 1.0)
-            p2 = sheet2_data.get('statistics', {}).get('p_value', 1.0)
+            p1 = qc1_summary.get('p_value', sheet1_data.get('chi2_p_value', 1.0))
+            p2 = qc2_summary.get('p_value', sheet2_data.get('chi2_p_value', 1.0))
             p_diff = p2 - p1
             p_interp = "More significant" if p1 < 0.05 and p2 >= 0.05 else "Less significant" if p1 >= 0.05 and p2 < 0.05 else "Similar significance"
             comparisons.append(["P-Value", f"{p1:.4f}", f"{p2:.4f}", f"{p_diff:.4f}", p_interp])
             
-            # Data completeness comparison
-            comp1 = sheet1_data.get('data_completeness', 0)
-            comp2 = sheet2_data.get('data_completeness', 0)
+            # Data completeness comparison - calculate from neurons
+            total_neurons1 = sheet1_data.get('total_neurons', 0)
+            active_neurons1 = sheet1_data.get('active_neurons', 0)
+            comp1 = (active_neurons1 / total_neurons1 * 100) if total_neurons1 > 0 else 0
+            
+            total_neurons2 = sheet2_data.get('total_neurons', 0)
+            active_neurons2 = sheet2_data.get('active_neurons', 0)
+            comp2 = (active_neurons2 / total_neurons2 * 100) if total_neurons2 > 0 else 0
+            
             comp_diff = comp2 - comp1
             comp_interp = "Better quality" if comp_diff > 5 else "Lower quality" if comp_diff < -5 else "Similar quality"
             comparisons.append(["Data Completeness (%)", f"{comp1:.1f}", f"{comp2:.1f}", f"{comp_diff:.1f}", comp_interp])
@@ -5140,29 +5199,40 @@ class StatisticalAnalyzer:
             
             # Process each analysis result for saving
             for sheet_name, result in self.batch_results.items():
+                # Extract matrix dimensions
+                matrix_shape = result.get('matrix_shape', (0, 0))
+                total_rows = matrix_shape[0] if matrix_shape and len(matrix_shape) > 0 else result.get('total_neurons', 0)
+                total_cols = matrix_shape[1] if matrix_shape and len(matrix_shape) > 1 else 0
+                
+                # Calculate data completeness (neuron utilization)
+                total_neurons = result.get('total_neurons', 0)
+                active_neurons = result.get('active_neurons', 0)
+                data_completeness = (active_neurons / total_neurons * 100) if total_neurons > 0 else 0
+                
+                # Get QC summary for statistics
+                qc_summary = self.get_chi_square_qc_summary(result)
+                
                 # Create a JSON-serializable version of the result
                 serializable_result = {
                     'status': result.get('status'),
                     'sheet_name': sheet_name,
-                    'total_rows': result.get('total_rows'),
-                    'total_cols': result.get('total_cols'),
-                    'data_completeness': result.get('data_completeness'),
+                    'total_rows': total_rows,
+                    'total_cols': total_cols,
+                    'data_completeness': data_completeness,
                     'warnings': result.get('warnings', []),
                     'error': result.get('error'),
                     'timestamp': result.get('timestamp', datetime.now().isoformat())
                 }
                 
-                # Include statistics if available
-                if 'statistics' in result:
-                    stats = result['statistics']
-                    serializable_result['statistics'] = {
-                        'chi2': float(stats.get('chi2', 0)),
-                        'p_value': float(stats.get('p_value', 1.0)),
-                        'degrees_of_freedom': int(stats.get('degrees_of_freedom', 0)),
-                        'cramers_v': float(stats.get('cramers_v', 0)),
-                        'sample_size': int(stats.get('sample_size', 0)),
-                        'expected_freq_ok': bool(stats.get('expected_freq_ok', False))
-                    }
+                # Include statistics from QC summary and direct result values
+                serializable_result['statistics'] = {
+                    'chi2': float(qc_summary.get('chi2', 0)),
+                    'p_value': float(qc_summary.get('p_value', result.get('chi2_p_value', 1.0))),
+                    'degrees_of_freedom': int(qc_summary.get('degrees_of_freedom', 0)),
+                    'cramers_v': float(result.get('cramers_v', 0)),
+                    'sample_size': int(result.get('total_observations', 0)),
+                    'expected_freq_ok': bool(qc_summary.get('expected_freq_ok', False))
+                }
                 
                 # Include confusion matrix if available (convert to list for JSON)
                 if 'confusion_matrix' in result and result['confusion_matrix'] is not None:
@@ -5175,9 +5245,8 @@ class StatisticalAnalyzer:
                     except Exception:
                         pass  # Skip if can't serialize matrix
                 
-                # Add QC summary
+                # Add QC summary (qc_summary already calculated above)
                 try:
-                    qc_summary = self.get_chi_square_qc_summary(result)
                     serializable_result['qc_summary'] = {
                         'qc_grade': qc_summary.get('qc_grade', 'F'),
                         'accuracy_score': float(qc_summary.get('accuracy_score', 0)),
@@ -5253,20 +5322,31 @@ class StatisticalAnalyzer:
             for sheet_name, result_data in project_data['analysis_results'].items():
                 try:
                     # Reconstruct the result object
+                    # Handle both old format (with total_rows/total_cols) and new format (with matrix_shape)
                     result = {
                         'status': result_data.get('status', 'unknown'),
                         'sheet_name': sheet_name,
-                        'total_rows': result_data.get('total_rows'),
-                        'total_cols': result_data.get('total_cols'),
-                        'data_completeness': result_data.get('data_completeness'),
                         'warnings': result_data.get('warnings', []),
                         'error': result_data.get('error'),
                         'timestamp': result_data.get('timestamp')
                     }
                     
-                    # Reconstruct statistics
+                    # Reconstruct matrix_shape from old format if needed
+                    if 'matrix_shape' in result_data:
+                        result['matrix_shape'] = tuple(result_data['matrix_shape'])
+                    elif 'total_rows' in result_data and 'total_cols' in result_data:
+                        # Old format - reconstruct matrix_shape
+                        result['matrix_shape'] = (result_data.get('total_rows', 0), result_data.get('total_cols', 0))
+                    
+                    # Reconstruct data completeness - calculate if not present
+                    if 'data_completeness' in result_data:
+                        # Store for backward compatibility, but we'll recalculate from neurons if available
+                        pass
+                    
+                    # Reconstruct statistics - handle both old and new formats
                     if 'statistics' in result_data:
                         stats = result_data['statistics']
+                        # Store statistics for backward compatibility
                         result['statistics'] = {
                             'chi2': stats.get('chi2', 0),
                             'p_value': stats.get('p_value', 1.0),
@@ -5275,6 +5355,10 @@ class StatisticalAnalyzer:
                             'sample_size': stats.get('sample_size', 0),
                             'expected_freq_ok': stats.get('expected_freq_ok', False)
                         }
+                        # Also store in new format locations
+                        result['chi2_p_value'] = stats.get('p_value', 1.0)
+                        result['cramers_v'] = stats.get('cramers_v', 0)
+                        result['total_observations'] = stats.get('sample_size', 0)
                     
                     # Reconstruct confusion matrix
                     if 'confusion_matrix' in result_data:
@@ -9278,17 +9362,16 @@ QUALITY WARNINGS:
             sheet_metrics = []
             for sheet_name, result in batch_results.items():
                 if result.get('status') == 'success':
-                    stats = result.get('statistics', {})
                     qc_summary = self.get_chi_square_qc_summary(result)
                     
                     metrics = {
                         'sheet_name': sheet_name,
-                        'global_fit': stats.get('global_fit', 0),
-                        'cramers_v': stats.get('cramers_v', 0),
-                        'accuracy': qc_summary.get('accuracy_score', 0),
+                        'global_fit': result.get('global_fit', 0),
+                        'cramers_v': result.get('cramers_v', 0),
+                        'accuracy': qc_summary.get('accuracy_score', result.get('global_fit', 0) / 100.0),
                         'qc_grade': qc_summary.get('qc_grade', 'F'),
-                        'p_value': stats.get('p_value', 1),
-                        'sample_size': stats.get('sample_size', 0),
+                        'p_value': qc_summary.get('p_value', result.get('chi2_p_value', 1.0)),
+                        'sample_size': result.get('total_observations', 0),
                         'total_score': 0  # Will calculate below
                     }
                     

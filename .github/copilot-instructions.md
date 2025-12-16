@@ -191,36 +191,30 @@ Note: The server-side components (test-*.js files) and HTML files are primarily 
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The system implements a comprehensive software licensing solution through two primary business components:
+The project implements a commercial software licensing system with two primary components:
 
-## License Protection Core
-**Path**: 01_SOURCE_CODE/protection_module.py
-**Importance**: 85/100
+## Core Protection System (85/100)
+Located in `01_SOURCE_CODE/protection_module.py`
 
-Implements multi-layered license protection mechanisms:
-- Machine-specific fingerprinting and binding validation
-- Runtime integrity monitoring
-- Anti-debugging protection
-- VM/sandbox detection
-- License validation workflow with format verification and expiration enforcement
+Multi-layered license protection focused on:
+- Commercial license validation with anti-debugging capabilities
+- Process monitoring for debugger detection
+- Runtime memory integrity validation
+- Virtual machine/sandbox detection with configurable severity
+- Machine-specific binding with path restrictions
+- Three-part license format validation
+- Runtime execution duration monitoring
 
-## License Administration System
-**Path**: DOCUMENTATION_AND_NOTES/license_admin_secure.html
-**Importance**: 75/100
+## License Administration (70/100)
+Located in `DOCUMENTATION_AND_NOTES/license_admin_secure.html`
 
-Handles secure license management through:
-- Two-factor authenticated admin access
-- Server-first validation with Firebase fallback
-- License binding/unbinding rules
-- Status transition management (active/revoked/reactivated)
-- Usage monitoring with duplicate detection
-- Automated revocation based on usage patterns
-
-The system's core value lies in the interaction between these components, creating a secure licensing solution with:
-- Multi-layered protection against tampering
-- Comprehensive license lifecycle management
-- Automated monitoring and enforcement
-- Cross-validated machine binding
+Handles license lifecycle management through:
+- Dual authentication system (server-primary with Firebase fallback)
+- Machine binding management with validation rules
+- License state management (activation/revocation/reactivation)
+- Duration-based license extension capabilities
+- Violation monitoring and status tracking
+- Configurable secure/fallback operation modes
 
 $END$
 

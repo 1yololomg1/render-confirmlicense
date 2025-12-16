@@ -1,0 +1,18 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview covering the multi-layered protection strategy, license management architecture, and violation handling framework"
+  },
+  {
+    "fileName": "protection-algorithms.mdc",
+    "description": "Detailed documentation of core protection algorithms including runtime monitoring, anti-debugging, hardware fingerprinting, and execution path validation logic"
+  },
+  {
+    "fileName": "license-management-flow.mdc",
+    "description": "Data flow documentation for license validation, hardware binding, and runtime integrity verification processes"
+  },
+  {
+    "fileName": "security-violation-handling.mdc",
+    "description": "Comprehensive documentation of violation categorization system, error code definitions, and configurable response mechanisms"
+  }
+]

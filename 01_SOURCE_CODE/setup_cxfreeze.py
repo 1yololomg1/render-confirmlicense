@@ -1,12 +1,27 @@
 """
-cx_Freeze setup for CONFIRM - COMPREHENSIVE DEPENDENCY CONFIGURATION
+============================================================================
+CONFIRM Statistical Validation Engine - cx_Freeze Build Configuration
+============================================================================
 Copyright (c) 2024 TraceSeis, Inc. All rights reserved.
 
-This setup includes all required packages, DLLs, and data files for a complete
-standalone executable distribution. The executable will be small (~23KB) as it's
-a loader - all libraries are in the lib/ folder.
+Professional build configuration for creating standalone executable distribution
+using cx_Freeze. This configuration includes all required packages, DLLs, and
+data files for a complete, self-contained application.
 
-Packages verified against actual imports in CONFIRM_Integrated.py and protection_module.py
+Build Output Structure:
+  - CONFIRM.exe (~23KB) - Loader executable that bootstraps the application
+  - lib/ - Contains all Python packages, libraries, and dependencies
+  - lib/numpy.libs/ - NumPy DLL files
+  - lib/scipy.libs/ - SciPy DLL files
+  - lib/matplotlib.libs/ - Matplotlib DLL files
+  - lib/protection_module.py - Security and protection module
+
+All packages in this configuration have been verified against actual imports
+in CONFIRM_Integrated.py and protection_module.py to ensure complete coverage.
+
+Note: The small executable size is expected and normal for cx_Freeze builds.
+All actual code and libraries are packaged in the lib/ folder.
+============================================================================
 """
 
 import sys
@@ -286,9 +301,13 @@ executables = [
 
 setup(
     name="CONFIRM",
-    version="1.2.0",
-    description="CONFIRM Statistical Validation Engine",
-    author="TraceSeis, Inc. (deltaV solutions)",
+    version="1.0.0",
+    description="CONFIRM Statistical Validation Engine - Professional Statistical Analysis Platform",
+    long_description="A comprehensive statistical validation engine for contingency analysis and machine learning model validation.",
+    author="TraceSeis, Inc. - deltaV solutions",
+    author_email="info@traceseis.com",
+    url="https://www.traceseis.com",
+    license="Proprietary - Copyright (C) 2024 TraceSeis, Inc. All rights reserved.",
     options={"build_exe": build_exe_options},
     executables=executables,
 )
