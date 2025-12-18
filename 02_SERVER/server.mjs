@@ -326,6 +326,19 @@ app.post('/validate', async (req, res) => {
       console.log(`✓ License ${licenseId} bound to machine ${machine_id?.substring(0, 8)}...`);
     }
     
+    // Track usage
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const usageRef = db.ref(`license/${licenseId}/usage`);
+    const usageSnapshot = await usageRef.once('value');
+    const usageData = usageSnapshot.val() || { total: 0, daily: {} };
+    
+    usageData.total = (usageData.total || 0) + 1;
+    usageData.daily = usageData.daily || {};
+    usageData.daily[today] = (usageData.daily[today] || 0) + 1;
+    usageData.last_validated = new Date().toISOString();
+    
+    await usageRef.set(usageData);
+    
     console.log(`✅ License ${licenseId} validation SUCCESSFUL - Returning valid response`);
     res.json({ 
       valid: true, 
@@ -1374,7 +1387,73 @@ app.get('/admin', (req, res) => {
           document.getElementById('allUpdateStatus').value = license.status || 'inactive';
           document.getElementById('allUpdateNotes').value = '';
           
-          let html = '<div class="json-viewer"><pre>' + JSON.stringify(license, null, 2) + '</pre></div>';
+          // Build usage stats HTML
+          let usageHtml = '';
+          if (license.usage) {
+            const totalValidations = license.usage.total || 0;
+            const lastValidated = license.usage.last_validated ? 
+              new Date(license.usage.last_validated).toLocaleString() : 'Never';
+            
+            // Get last 30 days of usage
+            const daily = license.usage.daily || {};
+            const today = new Date();
+            const last30Days = [];
+            for (let i = 29; i >= 0; i--) {
+              const date = new Date(today);
+              date.setDate(date.getDate() - i);
+              const dateStr = date.toISOString().split('T')[0];
+              last30Days.push({
+                date: dateStr,
+                count: daily[dateStr] || 0
+              });
+            }
+            
+            // Calculate usage pattern
+            const recentDays = last30Days.slice(-7);
+            const avgPerDay = recentDays.reduce((sum, d) => sum + d.count, 0) / 7;
+            let pattern = 'Low';
+            if (avgPerDay > 15) pattern = 'High (Commercial?)';
+            else if (avgPerDay > 5) pattern = 'Medium';
+            
+            usageHtml = \`
+              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">📊 Usage Statistics</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                  <div>
+                    <strong>Total Validations:</strong> \${totalValidations}
+                  </div>
+                  <div>
+                    <strong>Last Validated:</strong> \${lastValidated}
+                  </div>
+                  <div>
+                    <strong>Avg/Day (7d):</strong> \${avgPerDay.toFixed(1)}
+                  </div>
+                  <div>
+                    <strong>Pattern:</strong> <span style="color: \${pattern.includes('Commercial') ? '#EA4335' : pattern === 'Medium' ? '#FBBC05' : '#34A853'}; font-weight: bold;">\${pattern}</span>
+                  </div>
+                </div>
+                <div>
+                  <strong>Last 30 Days:</strong>
+                  <div style="display: flex; align-items: flex-end; height: 60px; gap: 2px; margin-top: 10px;">
+                    \${last30Days.map(d => {
+                      const maxCount = Math.max(...last30Days.map(x => x.count));
+                      const height = maxCount > 0 ? (d.count / maxCount * 50) : 0;
+                      return \`<div style="flex: 1; background: \${d.count > 15 ? '#EA4335' : d.count > 5 ? '#FBBC05' : '#4285F4'}; height: \${Math.max(height, 2)}px; border-radius: 2px 2px 0 0;" title="\${d.date}: \${d.count} validations"></div>\`;
+                    }).join('')}
+                  </div>
+                </div>
+              </div>
+            \`;
+          } else {
+            usageHtml = \`
+              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin-top: 0;">📊 Usage Statistics</h4>
+                <p style="color: #666;">No usage data yet. License has not been validated.</p>
+              </div>
+            \`;
+          }
+          
+          let html = usageHtml + '<div class="json-viewer"><h4>Full License Data:</h4><pre>' + JSON.stringify(license, null, 2) + '</pre></div>';
           document.getElementById('allLicenseData').innerHTML = html;
           
           detailsDiv.scrollIntoView({ behavior: 'smooth' });
