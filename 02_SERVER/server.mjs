@@ -1628,6 +1628,18 @@ app.post('/admin/update-license', async (req, res) => {
       const currentExpiry = new Date(license.expires);
       const newExpiry = new Date(currentExpiry.getTime() + (extendDays * 24 * 60 * 60 * 1000));
       updates.expires = newExpiry.toISOString();
+      
+      // CRITICAL FIX: Regenerate license_key with new expiry
+      const parts = license.license_key.split(':');
+      const licenseId = parts[0]; // Keep same license ID
+      const newExpiryISO = newExpiry.toISOString();
+      const newSignature = crypto.createHmac('sha256', LICENSE_SECRET)
+        .update(`${licenseId}:${newExpiryISO}`)
+        .digest('hex')
+        .substring(0, 16);
+      updates.license_key = `${licenseId}:${newExpiryISO}:${newSignature}`;
+      
+      console.log(`Extended license ${licenseId} by ${extendDays} days. New expiry: ${newExpiryISO}`);
     }
     
     // Add notes if provided
