@@ -1,5 +1,5 @@
 ---
-description: Specification for implementing software protection, anti-debugging, and hardware fingerprinting systems
+description: Specification for analyzing security and protection mechanisms including hardware fingerprinting and anti-tampering systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -235,31 +235,44 @@ $END$
 
 # protection-algorithms
 
-## Hardware Fingerprinting (Score: 90)
-Core machine binding validation system operating through:
-- Machine-specific path restrictions
-- Runtime environment detection
-- Virtual machine/sandbox identification with configurable severity thresholds
+## Core Protection Mechanisms (01_SOURCE_CODE/protection_module.py)
 
-## Anti-Debugging Protection (Score: 85)
-Process monitoring system targeting:
-- Active debugger application detection
-- Memory patch attempt identification
-- Runtime integrity validation checks
+Hardware Fingerprinting:
+- Machine binding validation through hardware identifiers
+- Duplicate machine detection and tracking
+- Machine ID format validation with tripartite structure
 
-## Runtime Protection (Score: 85)
-Multi-layered validation framework implementing:
-- Execution duration monitoring
-- Three-part license structure verification
-- Environment-specific protection level adaptation (development/production)
-- Integrity validation for runtime memory state
+Anti-Debugging Systems:
+- Active process scanning for debugger detection
+- API hooking prevention mechanisms
+- Memory patch detection and blocking
+- Virtual machine environment detection (warning level)
+- Sandbox environment detection (critical level)
 
-## Secure License Validation (Score: 80)
-Two-tier authentication architecture:
-- Primary secure server validation
-- Firebase-based fallback authentication
-- Machine binding state management
-- License state transition handling (active/revoked/reactivated)
+Runtime Integrity:
+- Continuous execution path validation (30-second intervals)
+- Whitelist-based execution validation
+- File size boundary enforcement (1MB - 500MB)
+- Path restriction validation
+- License data integrity verification
+
+Importance Score: 90/100
+
+## Protection Response Logic
+
+Violation Categories:
+- Critical violations trigger immediate termination
+- Warning violations generate logs without termination
+- Virtual machine detection handled as warnings
+- Sandbox detection treated as critical violations
+
+Protection Monitoring:
+- Continuous runtime checks every 30 seconds
+- Machine binding verification
+- License expiration validation
+- Revocation status checking
+
+Importance Score: 85/100
 
 $END$
 

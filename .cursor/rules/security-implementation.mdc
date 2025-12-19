@@ -1,5 +1,5 @@
 ---
-description: Defines security measures for license protection, tampering detection, and validation workflows
+description: Analysis of custom security implementations, anti-tampering mechanisms, and license protection systems
 ---
 
 # === USER INSTRUCTIONS ===
@@ -319,42 +319,46 @@ $END$
 
 # security-implementation
 
-## Core Protection Layer (Score: 90/100)
-`01_SOURCE_CODE/protection_module.py`
+Multi-layer security architecture consisting of:
 
-### Anti-Tampering System
-- Process monitoring system detects and blocks known debugger applications
-- Runtime integrity validation identifies memory patching attempts
-- Virtual machine detection with configurable severity responses:
-  - Sandbox environment identification
-  - VM platform fingerprinting
-  - Customizable action triggers based on detection
+## Protection Core (01_SOURCE_CODE/protection_module.py)
+Importance Score: 90/100
 
-### License Validation Architecture
-- Three-part license structure with cryptographic validation
-- Machine-specific binding enforced through path restrictions
-- Execution duration monitoring with configurable time limits
-- Environment-specific protection levels (development/production)
+Anti-Tampering Layer:
+- Process scanning for debugger detection
+- Memory patch monitoring
+- API hook prevention mechanisms
+- Runtime integrity validation via executable checksums
+- Continuous path validation against whitelisted locations
 
-## License Security Administration (Score: 85/100)
-`DOCUMENTATION_AND_NOTES/license_admin_secure.html`
+Environment Detection:
+- VM detection via hardware fingerprinting
+- Sandbox environment identification
+- Critical violation triggers for sandbox detection
+- Warning-level alerts for VM execution
 
-### Authentication Framework
-- Two-tier authentication implementation:
-  - Primary secure server validation
-  - Firebase-based fallback authentication
-- Machine binding/unbinding validation rules
-- State transition security controls:
-  - Active → Revoked
-  - Revoked → Reactivated
-  - Validation checks at each transition point
+License Security:
+- Machine-specific binding validation
+- Triple-part key structure (format: xxx:xxx:xxx)
+- Revocation status verification
+- File integrity checks with size constraints (1MB-500MB)
+- 30-second interval runtime monitoring cycles
 
-### Security Policy Controls
-- Dual operational modes with distinct security levels:
-  - Secure server mode with full validation
-  - Fallback mode with reduced privileges
-- License violation monitoring system
-- Secure workflows for activation/deactivation
+## Administrative Controls (DOCUMENTATION_AND_NOTES/license_admin_secure.html)
+Importance Score: 75/100
+
+Server Authentication:
+- Server-first authentication protocol
+- Machine ID validation system
+- Duplicate machine detection logic
+- License state management (active/inactive/revoked)
+- Usage monitoring with statistical tracking
+
+Protection Classifications:
+- Critical violations trigger immediate termination
+- Warning violations generate logs
+- Machine binding verification
+- License expiration enforcement
 
 $END$
 

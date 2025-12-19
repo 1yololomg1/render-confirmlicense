@@ -1,5 +1,5 @@
 ---
-description: Specification for license management processes including validation, revocation and state transitions
+description: Defines the complete license lifecycle management process including creation, validation, revocation and status transitions
 ---
 
 # === USER INSTRUCTIONS ===
@@ -286,36 +286,50 @@ $END$
 
 # license-workflow
 
-## Core License States & Transitions (Score: 95)
-- Active -> Revoked -> Reactivated state transition model
-- Machine binding/unbinding validation during state changes
-- Duration-based extension mechanism for active licenses
-- Violation monitoring with status tracking
+## License Lifecycle States
+- Active: Valid and bound to specific machine
+- Inactive: Created but not yet bound
+- Revoked: Permanently invalidated
+- Expired: Past valid duration
 
-## License Validation Process (Score: 90)
-Location: 01_SOURCE_CODE/protection_module.py
-- Three-part license structure validation
-- Runtime execution duration monitoring
-- Environment-specific protection levels
-- Machine binding validation with path restrictions
-- Anti-debugging process monitoring
-- Runtime integrity checks
-- Virtual machine/sandbox detection
+Importance Score: 85/100
 
-## License Administration (Score: 85)
-Location: DOCUMENTATION_AND_NOTES/license_admin_secure.html
-- Two-tier authentication system:
-  - Primary secure server validation
-  - Firebase-based fallback authentication
-- Custom activation/deactivation workflows
-- Violation tracking and enforcement
-- Machine binding management rules
+## Validation Rules
+- Machine binding verification required
+- License key format: 3-part structure with colon separators 
+- Environment validation checks:
+  - Virtual machine detection (warning level)
+  - Sandbox detection (critical level)
+  - Process scanning for debuggers
+- Runtime integrity monitoring every 30 seconds
 
-## Authentication Modes (Score: 75)
-- Secure server mode with full validation
-- Fallback mode with reduced capabilities
-- Dual-mode operations for high availability
-- Configurable severity levels per environment
+Importance Score: 80/100
+
+## Management Operations
+Located in `/DOCUMENTATION_AND_NOTES/license_admin_secure.html`:
+
+- Machine ID binding and validation
+- Status transitions (activate/deactivate/revoke)
+- Duration extension
+- Usage monitoring
+- Duplicate machine detection
+- Server-first authentication required for admin access
+
+Importance Score: 75/100
+
+## Protection Mechanisms
+Located in `/01_SOURCE_CODE/protection_module.py`:
+
+- Continuous runtime monitoring
+- Memory tampering detection
+- API hook prevention
+- Execution path validation
+- License data integrity checks
+- Violation categorization:
+  - Critical: Immediate termination
+  - Warning: Logging only
+
+Importance Score: 85/100
 
 $END$
 

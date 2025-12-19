@@ -191,30 +191,48 @@ Note: The server-side components (test-*.js files) and HTML files are primarily 
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-The project implements a commercial software licensing system with two primary components:
+The project implements a comprehensive license protection and management system with two primary components:
 
-## Core Protection System (85/100)
-Located in `01_SOURCE_CODE/protection_module.py`
+## License Protection Core
+**Location**: 01_SOURCE_CODE/protection_module.py
+**Importance Score**: 85
 
-Multi-layered license protection focused on:
-- Commercial license validation with anti-debugging capabilities
-- Process monitoring for debugger detection
-- Runtime memory integrity validation
-- Virtual machine/sandbox detection with configurable severity
-- Machine-specific binding with path restrictions
-- Three-part license format validation
-- Runtime execution duration monitoring
+Primary protection mechanisms:
+- Machine-specific license binding
+- Anti-debugging and process scanning
+- Runtime integrity validation
+- VM/sandbox environment detection
+- Memory protection against patching
+- Execution path whitelisting
+- License data verification
+- Continuous runtime monitoring
 
-## License Administration (70/100)
-Located in `DOCUMENTATION_AND_NOTES/license_admin_secure.html`
+Key validation rules:
+- Machine binding verification
+- Expiry and revocation checks
+- File size constraints (1MB-500MB)
+- Three-part license key format
+- 30-second monitoring intervals
 
-Handles license lifecycle management through:
-- Dual authentication system (server-primary with Firebase fallback)
-- Machine binding management with validation rules
-- License state management (activation/revocation/reactivation)
-- Duration-based license extension capabilities
-- Violation monitoring and status tracking
-- Configurable secure/fallback operation modes
+## License Administration
+**Location**: DOCUMENTATION_AND_NOTES/license_admin_secure.html
+**Importance Score**: 75
+
+Management capabilities:
+- Machine ID verification
+- License status control
+- Duration management
+- Usage tracking
+- Duplicate machine detection
+- Server-first authentication
+
+Core business requirements:
+- Single license per machine enforcement
+- Controlled execution environment
+- Anti-tampering protection
+- Complete license lifecycle control
+- Runtime violation monitoring
+- Categorized protection responses (critical/warning)
 
 $END$
 
