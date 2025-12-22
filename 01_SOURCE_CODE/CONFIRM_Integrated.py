@@ -1350,6 +1350,55 @@ signal.signal(signal.SIGINT, signal_handler)
 if hasattr(signal, 'SIGTERM'):
     signal.signal(signal.SIGTERM, signal_handler)
 
+def bind_mousewheel_to_widget(widget, allow_horizontal=True):
+    """Helper function to bind mouse wheel scrolling to any scrollable widget (Text, Treeview, etc.)"""
+    def _on_mousewheel(event):
+        """Handle mouse wheel scrolling"""
+        try:
+            if hasattr(event, 'delta') and event.delta:
+                # Windows/Mac
+                if hasattr(widget, 'yview_scroll'):
+                    widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            elif hasattr(event, 'num'):
+                # Linux - event.num instead of event.delta
+                if event.num == 4:
+                    if hasattr(widget, 'yview_scroll'):
+                        widget.yview_scroll(-1, "units")
+                elif event.num == 5:
+                    if hasattr(widget, 'yview_scroll'):
+                        widget.yview_scroll(1, "units")
+        except:
+            pass
+    
+    def _on_shift_mousewheel(event):
+        """Handle Shift+mouse wheel for horizontal scrolling"""
+        try:
+            if hasattr(event, 'delta') and event.delta:
+                # Windows/Mac
+                if hasattr(widget, 'xview_scroll') and allow_horizontal:
+                    widget.xview_scroll(int(-1 * (event.delta / 120)), "units")
+            elif hasattr(event, 'num'):
+                # Linux
+                if event.num == 4:
+                    if hasattr(widget, 'xview_scroll') and allow_horizontal:
+                        widget.xview_scroll(-1, "units")
+                elif event.num == 5:
+                    if hasattr(widget, 'xview_scroll') and allow_horizontal:
+                        widget.xview_scroll(1, "units")
+        except:
+            pass
+    
+    # Bind mouse wheel events (Windows/Mac)
+    widget.bind("<MouseWheel>", _on_mousewheel)
+    if allow_horizontal:
+        widget.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
+    # Linux support (Button-4 = scroll up, Button-5 = scroll down)
+    widget.bind("<Button-4>", _on_mousewheel)
+    widget.bind("<Button-5>", _on_mousewheel)
+    if allow_horizontal:
+        widget.bind("<Shift-Button-4>", _on_shift_mousewheel)
+        widget.bind("<Shift-Button-5>", _on_shift_mousewheel)
+
 class VisualizationWindow:
     """Separate window for displaying visualizations with better UI"""
     def __init__(self, parent, analyzer):
@@ -6308,6 +6357,7 @@ class StatisticalAnalyzer:
         menubar.add_cascade(label="Help", menu=help_menu)
         
         help_menu.add_command(label="User Guide", command=self.show_help)
+        help_menu.add_command(label="Statistical Terminology", command=self.show_statistical_terminology)
         help_menu.add_separator()
         help_menu.add_command(label="Terms of Service", command=self.show_terms)
         help_menu.add_separator()
@@ -6449,6 +6499,44 @@ For support and inquiries: info@traceseis.com"""
    • Evaluates how well the SOM separated different categories types
    • Based on classification accuracy and unit utilization
 
+KEY STATISTICAL CONCEPTS:
+
+   CHI-SQUARE TEST:
+   • Tests whether observed patterns differ significantly from random chance
+   • Higher values indicate stronger association between predictions and actual outcomes
+   • Minimum requirements: 20+ observations, 2×2 matrix, expected frequencies ≥5 in 80% of cells
+
+   P-VALUE (STATISTICAL SIGNIFICANCE):
+   • Probability that the observed pattern could occur by random chance
+   • Lower values = stronger evidence of real patterns
+   • p < 0.05: Statistically significant (95% confidence)
+   • p ≥ 0.05: Not statistically significant
+
+   CRAMER'S V (EFFECT SIZE):
+   • Measures the STRENGTH of association between predicted and actual classes
+   • Scale: 0 to 1 (0 = no relationship, 1 = perfect relationship)
+   • Interpretation:
+     - V ≥ 0.7: Very large effect (strong association)
+     - V ≥ 0.5: Large effect (strong association)
+     - V ≥ 0.3: Medium effect (moderate association)
+     - V < 0.3: Small or negligible effect
+
+   QC GRADES (A-F):
+   • CONFIRM's composite reliability grade based on statistical significance, effect size, accuracy, and test validity
+   • A (≥90%): Excellent quality - Results highly reliable and statistically robust
+   • B (≥80%): Very good quality - Results reliable with minor limitations
+   • C (≥70%): Good quality - Results acceptable with some limitations
+   • D (≥60%): Fair quality - Significant limitations, interpret with caution
+   • F (<60%): Poor quality - Results unreliable, should not be used
+
+   KEY DISTINCTIONS:
+   • Statistical Significance (p-value): "Is this pattern real or just luck?"
+   • Effect Size (Cramer's V): "How strong/important is this pattern?"
+   • You need BOTH significance AND effect size for reliable models
+   • High accuracy with poor statistics = got lucky, will fail on new data
+
+   Note: See 'Statistical Terminology' in Help menu for complete definitions and detailed explanations.
+
 4. VISUALIZATIONS
    
    DISTRIBUTION: Shows how samples are distributed among predicted types
@@ -6491,11 +6579,11 @@ For support and inquiries: info@traceseis.com"""
    Not Diabetic |    15   |    188
    
    CONTINGENCY TABLE FORMAT (SOM):
-   • First column header: "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node")
-   • Column headers: Category type names
-   • Row labels: Neuron/Unit identifiers (typically numbers: 1, 2, 3...)
+   • Row 1 (top row): Contains column headers - First column header should be "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node"), followed by category type name headers
+   • Column A (first column): Must contain sequential integers starting from 1 (1, 2, 3, ...). No text identifiers allowed.
+   • Data cells: Must contain ONLY numeric values (frequency counts). No text words allowed.
    • Rectangular matrix (m neurons × n classes)
-   • Cell values: Frequency counts per neuron-class combination
+   • Preferably no empty cells - use 0 (zero) instead of leaving cells blank
    
    EXAMPLE CONTINGENCY TABLE:
    Neuron | Shale | Wet Sand | Fine Sand
@@ -6504,18 +6592,52 @@ For support and inquiries: info@traceseis.com"""
    2      |   12  |   38     |    8
    3      |    3  |   15     |   42
 
+   UNDERSTANDING EXPECTED EXCEL LAYOUT:
+   CONTINGENCY TABLE LAYOUT REQUIREMENTS (CORRECT FORMAT):
+   • Row 1 (top row): Contains column headers/labels (e.g., "Neuron", "Shale", "Wet Sand", "Tight Sand", "Gas Sand")
+   • Column A (first column): Must contain sequential integers starting from 1 (1, 2, 3, 4, ...). Text identifiers such as "Supplier A" or "Category_1" will cause the file to be rejected.
+   • Data cells (all other cells): Must contain ONLY numeric values (counts or proportions). No text words allowed in data cells.
+   • Empty cells: Preferably avoid empty cells. Use 0 (zero) to represent absence of data rather than leaving cells blank.
+   • All values must be numeric - mixed text and numeric data will trigger validation errors.
+   
+   EXAMPLES OF FORMATS THAT WILL BE REJECTED:
+   • Text identifiers in first column (e.g., "Supplier A", "Category_1") instead of sequential numbers
+   • Text words in data cells (all data cells must contain only numbers)
+   • Headers missing from top row
+   • Blank data cells (should use 0 instead)
+
 8. TROUBLESHOOTING
    
    COMMON ISSUES:
-   • "No data to analyze": Check that your Excel sheet contains numeric data
-   • "Data too large": Reduce dataset size or close other applications
-   • "Invalid file structure": Ensure Excel file is not corrupted
-   • Visualization errors: Try reducing the number of categories types
+   • "Startup Connection Issue": Check your internet connection. If activation is required in your environment, confirm the activation service is reachable. Contact support if the message persists.
+   • "File Won't Load": Ensure file is Excel format (.xlsx, .xls). Check file is not corrupted. Try opening in Excel first.
+   • "No data to analyze": Check that your Excel sheet contains numeric data. Verify data format matches expected structure (see Input Format Guide).
+   • "Analysis Failed": Check data format in Excel. Ensure numeric data in analysis columns. Verify no empty rows/columns. Ensure column headers are correctly formatted.
+   • "Data too large": Reduce dataset size or close other applications. Ensure adequate RAM available.
+   • "Invalid file structure": Ensure Excel file is not corrupted. Verify file matches expected format (see Input Format Guide).
+   • "Slow Performance": Close other applications. Use smaller data files. Ensure adequate RAM available.
+   • Visualization errors: Try reducing the number of categories types. Keep category names short for better chart readability.
    
-   PERFORMANCE TIPS:
-   • Close other memory-intensive applications before analysis
-   • Use Excel files rather than CSV for better compatibility
-   • Keep categories type names short for better chart readability
+   TIPS FOR BEST RESULTS:
+   
+   DATA PREPARATION:
+   • Use clean, well-formatted Excel files
+   • Ensure column headers are in first row (for Contingency Tables) or match expected format
+   • Remove empty rows and columns
+   • Use consistent data types
+   • For Contingency Tables: First column must contain sequential integers (1, 2, 3...), not text labels
+   
+   ANALYSIS SETTINGS:
+   • Start with default settings
+   • Adjust parameters as needed based on results
+   • Review results before exporting
+   • Save projects for future use and comparison
+   
+   PERFORMANCE OPTIMIZATION:
+   • Process smaller files for faster results
+   • Use batch processing for multiple sheets efficiently
+   • Close unnecessary applications to free memory
+   • Ensure stable internet connection if activation is required
 
 © 2025 TraceSeis, Inc. All rights reserved."""
         
@@ -6529,6 +6651,9 @@ For support and inquiries: info@traceseis.com"""
         
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Mouse wheel scrolling for help text
+        bind_mousewheel_to_widget(text_widget, allow_horizontal=False)
         
         # Close button
         ttk.Button(main_frame, text="Close", command=help_window.destroy, 
@@ -6629,11 +6754,11 @@ READING THE TABLE:
 
 USE CASE: Validating clustering quality or SOM neuron-class associations
 
-EXCEL FORMAT:
-• First column header: "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node")
-• Column headers: Class names
-• Row labels: Neuron/Unit identifiers (typically numbers: 1, 2, 3, ...)
-• Cell values: Numeric frequency counts
+EXCEL FORMAT (CORRECT LAYOUT):
+• Row 1 (top row): Contains column headers/labels - First column header should be "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node"), followed by class name headers
+• Column A (first column): Must contain sequential integers starting from 1 (1, 2, 3, ...). No text identifiers allowed.
+• Data cells: Must contain ONLY numeric values (frequency counts). No text words allowed.
+• Preferably no empty cells - use 0 (zero) instead of leaving cells blank.
 
 
 ═══════════════════════════════════════════════════════════════════════════
@@ -6660,6 +6785,175 @@ IMPORTANT NOTES
         
         # Close button
         ttk.Button(main_frame, text="Close", command=format_help_window.destroy, 
+                  width=15).pack(pady=(15, 0))
+    
+    def show_statistical_terminology(self):
+        """Show Statistical Terminology & Definitions dialog"""
+        terminology_window = tk.Toplevel(self.root)
+        terminology_window.title("CONFIRM Statistical Terminology & Definitions")
+        terminology_window.geometry("800x700")
+        terminology_window.grab_set()  # Make modal
+        
+        # Center the window
+        terminology_window.transient(self.root)
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 400
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 350
+        terminology_window.geometry(f"+{x}+{y}")
+        
+        # Main frame with scrollbar
+        main_frame = ttk.Frame(terminology_window, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        ttk.Label(main_frame, text="CONFIRM Statistical Terminology & Definitions", 
+                 font=('Arial', 16, 'bold')).pack(pady=(0, 15))
+        
+        # Help content with scrollbar
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        
+        terminology_text = """CONFIRM STATISTICAL TERMINOLOGY & DEFINITIONS
+
+
+═══════════════════════════════════════════════════════════════════════════
+CORE STATISTICAL TESTS
+═══════════════════════════════════════════════════════════════════════════
+
+CHI-SQUARE TEST (χ²)
+- Tests whether observed patterns in a confusion matrix differ significantly from random chance
+- Measures the discrepancy between observed frequencies and expected frequencies
+- Higher chi-square values indicate stronger association between predictions and actual outcomes
+- Minimum Requirements:
+  - At least 20 total observations
+  - At least 2×2 matrix
+  - Expected frequencies ≥5 in at least 80% of cells
+
+P-VALUE
+- Probability that the observed pattern could occur by random chance
+- Lower values = stronger evidence of real patterns (not luck)
+- Interpretation:
+  - p < 0.001: Highly significant (99.9% confidence)
+  - p < 0.01: Very significant (99% confidence)
+  - p < 0.05: Significant (95% confidence)
+  - p ≥ 0.05: Not statistically significant
+
+CRAMER'S V (EFFECT SIZE)
+- Measures the STRENGTH of association between predicted and actual classes
+- Scale: 0 to 1 (0 = no relationship, 1 = perfect relationship)
+- Formula: V = √(χ² / (n × min(rows-1, cols-1)))
+  - n = total observations
+  - Normalized so table size doesn't affect the value
+- Interpretation:
+  - V ≥ 0.7: Very large effect (strong association)
+  - V ≥ 0.5: Large effect (strong association)
+  - V ≥ 0.3: Medium effect (moderate association)
+  - V ≥ 0.1: Small effect (weak association)
+  - V < 0.1: Negligible effect
+
+DEGREES OF FREEDOM (df)
+- Number of independent values in the calculation
+- Formula: min(rows - 1, columns - 1)
+- Used to determine statistical significance thresholds
+
+
+═══════════════════════════════════════════════════════════════════════════
+PERFORMANCE METRICS
+═══════════════════════════════════════════════════════════════════════════
+
+CONFUSION MATRIX
+- Table showing how predictions compare to actual outcomes
+- Rows = Actual classes
+- Columns = Predicted classes
+- Diagonal = Correct predictions
+- Off-diagonal = Errors
+
+CLASSIFICATION ACCURACY
+- Percentage of correct predictions
+- Formula: (Sum of diagonal / Total observations) × 100
+- Example: 1680/2000 = 84% accuracy
+
+GLOBAL FIT
+- Overall model performance as a percentage (same as accuracy)
+- Term used in geophysical validation
+
+EXPECTED FREQUENCY
+- The count you'd expect in each cell if predictions were random
+- Chi-square assumption: Expected frequencies should be ≥5 in at least 80% of cells
+- Violations indicate unreliable chi-square results
+
+
+═══════════════════════════════════════════════════════════════════════════
+QUALITY GRADES
+═══════════════════════════════════════════════════════════════════════════
+
+QC GRADE (A-F)
+CONFIRM's composite reliability grade based on 4 factors:
+
+15-Point Scoring System:
+1. Statistical Significance (0-5 pts) - Is the pattern real?
+2. Effect Size (0-5 pts) - How strong is the pattern?
+3. Accuracy (0-3 pts) - How well does it predict?
+4. Assumptions Met (0-2 pts) - Is the test valid?
+
+Letter Grades:
+- A (≥90%): Excellent quality - Results highly reliable and statistically robust
+- B (≥80%): Very good quality - Results reliable with minor limitations
+- C (≥70%): Good quality - Results acceptable with some limitations
+- D (≥60%): Fair quality - Significant limitations, interpret with caution
+- F (<60%): Poor quality - Results unreliable, should not be used
+
+
+═══════════════════════════════════════════════════════════════════════════
+MODEL COMPARISON METRICS
+═══════════════════════════════════════════════════════════════════════════
+
+COMPOSITE SCORE (for ranking multiple models)
+- Weighted combination of metrics:
+  - Global Fit: 30%
+  - Cramer's V: 25%
+  - Accuracy: 25%
+  - (1 - p-value): 20%
+- Higher scores = better overall model quality
+
+NEURON/CLASS UTILIZATION
+- Percentage of classes actually used by the model
+- Low utilization may indicate model isn't learning distinctions
+
+
+═══════════════════════════════════════════════════════════════════════════
+KEY DISTINCTIONS
+═══════════════════════════════════════════════════════════════════════════
+
+STATISTICAL SIGNIFICANCE VS. EFFECT SIZE
+- Significance (p-value): "Is this pattern real or just luck?"
+- Effect Size (Cramer's V): "How strong/important is this pattern?"
+- You can have significance without effect (large dataset, weak pattern)
+- You need BOTH for reliable models
+
+ACCURACY VS. STATISTICAL RELIABILITY
+- Accuracy: Percentage correct on this dataset
+- Reliability: Whether performance will hold on new data
+- High accuracy with poor statistics = got lucky, will fail in production
+
+
+© 2025 TraceSeis, Inc. All rights reserved."""
+        
+        text_widget = tk.Text(text_frame, wrap=tk.WORD, font=('Courier', 9), 
+                             bg='white', relief=tk.SUNKEN, borderwidth=1)
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        text_widget.insert(1.0, terminology_text)
+        text_widget.configure(state='disabled')
+        
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Mouse wheel scrolling for terminology text
+        bind_mousewheel_to_widget(text_widget, allow_horizontal=False)
+        
+        # Close button
+        ttk.Button(main_frame, text="Close", command=terminology_window.destroy, 
                   width=15).pack(pady=(15, 0))
     
     def show_terms(self):
