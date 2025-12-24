@@ -21,8 +21,10 @@ import crypto from "crypto";
 import admin from "firebase-admin";
 import Stripe from "stripe";
 import sgMail from "@sendgrid/mail";
+import helmet from "helmet";
 
 const app = express();
+app.use(helmet());
 app.use(express.json());
 
 // Environment variable validation
