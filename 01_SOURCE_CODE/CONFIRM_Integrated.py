@@ -118,6 +118,7 @@ else:
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
 LOG_FILE = CONFIG_DIR / "confirm.log"
+LOCK_FILE = CONFIG_DIR / "confirm.lock"
 
 # Timeout and Performance Constants
 NETWORK_REQUEST_TIMEOUT = int(os.getenv("CONFIRM_NETWORK_TIMEOUT", "15"))
@@ -138,7 +139,7 @@ __contact__ = "info@traceseis.com"
 # Ensure configuration directory exists with robust error handling
 def ensure_config_directory():
     """Create config directory with multiple fallback options"""
-    global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE
+    global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE, LOCK_FILE
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         return True
@@ -152,6 +153,7 @@ def ensure_config_directory():
             SETTINGS_FILE = CONFIG_DIR / "settings.json"
             LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
             LOG_FILE = CONFIG_DIR / "confirm.log"
+            LOCK_FILE = CONFIG_DIR / "confirm.lock"
             print(f"WARNING: Could not create config directory in AppData, using: {CONFIG_DIR}")
             print(f"Error: {e}")
             return True
@@ -227,6 +229,140 @@ else:
         logger.warning("Commercial protection features will not be available")
     else:
         logger.warning("Protection module not available - commercial protection disabled")
+
+# Single-instance lockfile management
+_lockfile_handle = None
+
+def acquire_instance_lock():
+    """
+    Acquire a lockfile to prevent multiple instances from running simultaneously.
+    Returns True if lock acquired successfully, False if another instance is running.
+    """
+    global _lockfile_handle
+    
+    try:
+        # Check if lockfile exists and if the process is still running
+        if LOCK_FILE.exists():
+            try:
+                # Read PID from lockfile
+                with open(LOCK_FILE, 'r') as f:
+                    lock_data = f.read().strip()
+                    if lock_data:
+                        parts = lock_data.split(':', 1)
+                        if len(parts) == 2:
+                            pid_str, timestamp_str = parts
+                            try:
+                                pid = int(pid_str)
+                                # Check if process is still running
+                                if platform.system() == "Windows":
+                                    # Windows: use tasklist to check if process exists
+                                    import subprocess
+                                    try:
+                                        result = subprocess.run(
+                                            ['tasklist', '/FI', f'PID eq {pid}'],
+                                            capture_output=True,
+                                            text=True,
+                                            timeout=2
+                                        )
+                                        if str(pid) in result.stdout:
+                                            # Process is still running
+                                            logger.warning(f"Another instance detected (PID: {pid})")
+                                            return False
+                                    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                                        # Can't verify, assume stale lock
+                                        pass
+                                else:
+                                    # Unix-like: use os.kill with signal 0 to check process
+                                    try:
+                                        os.kill(pid, 0)
+                                        # Process is still running
+                                        logger.warning(f"Another instance detected (PID: {pid})")
+                                        return False
+                                    except (OSError, ProcessLookupError):
+                                        # Process doesn't exist, lock is stale
+                                        pass
+                            except ValueError:
+                                # Invalid PID format, treat as stale
+                                pass
+            except (IOError, OSError):
+                # Can't read lockfile, assume stale
+                pass
+            
+            # Lockfile exists but process is dead - remove stale lock
+            try:
+                LOCK_FILE.unlink()
+                logger.info("Removed stale lockfile")
+            except (OSError, PermissionError):
+                logger.warning("Could not remove stale lockfile, but continuing")
+        
+        # Create new lockfile with current PID and timestamp
+        try:
+            pid = os.getpid()
+            timestamp = str(int(time.time()))
+            lock_data = f"{pid}:{timestamp}"
+            
+            # Use exclusive file creation (fails if file exists)
+            # On Windows, we need to handle file locking differently
+            if platform.system() == "Windows":
+                # Windows: try to open with exclusive access
+                try:
+                    _lockfile_handle = open(LOCK_FILE, 'x')
+                    _lockfile_handle.write(lock_data)
+                    _lockfile_handle.flush()
+                    logger.info(f"Instance lock acquired (PID: {pid})")
+                    return True
+                except FileExistsError:
+                    # Another instance created it between our check and creation
+                    logger.warning("Another instance started while acquiring lock")
+                    return False
+            else:
+                # Unix-like: use fcntl for proper file locking
+                try:
+                    import fcntl
+                    _lockfile_handle = open(LOCK_FILE, 'w')
+                    fcntl.flock(_lockfile_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    _lockfile_handle.write(lock_data)
+                    _lockfile_handle.flush()
+                    logger.info(f"Instance lock acquired (PID: {pid})")
+                    return True
+                except (IOError, BlockingIOError):
+                    # Lock is held by another process
+                    if _lockfile_handle:
+                        _lockfile_handle.close()
+                        _lockfile_handle = None
+                    logger.warning("Could not acquire lock - another instance may be running")
+                    return False
+        except (IOError, OSError, PermissionError) as e:
+            logger.error(f"Failed to create lockfile: {e}")
+            # Don't block execution if we can't create lockfile
+            # This allows the app to run even if there are permission issues
+            return True
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in acquire_instance_lock: {e}")
+        # On error, allow execution to continue (fail open)
+        return True
+
+def release_instance_lock():
+    """Release the instance lockfile on application exit."""
+    global _lockfile_handle
+    
+    try:
+        if _lockfile_handle:
+            _lockfile_handle.close()
+            _lockfile_handle = None
+        
+        if LOCK_FILE.exists():
+            try:
+                LOCK_FILE.unlink()
+                logger.info("Instance lock released")
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Could not remove lockfile: {e}")
+    except Exception as e:
+        logger.warning(f"Error releasing lock: {e}")
+
+# Register cleanup handler for lockfile
+atexit.register(release_instance_lock)
 
 
 class SecurityError(Exception):
@@ -10693,6 +10829,30 @@ def main():
         print(f"\nStarting {APP_NAME} v{APP_VERSION}...")
         print(f"Log file: {LOG_FILE}\n")
         
+        # Check for single instance - prevent multiple instances from running
+        logger.info("Checking for existing instance...")
+        if not acquire_instance_lock():
+            error_msg = (
+                f"Another instance of {APP_NAME} is already running.\n\n"
+                "Only one instance can run at a time to ensure proper license management.\n"
+                "Please close the existing instance before starting a new one."
+            )
+            print(f"\n❌ ERROR: {error_msg}\n")
+            logger.error("Application startup blocked - another instance detected")
+            if platform.system() == "Windows":
+                # Show Windows message box
+                try:
+                    import ctypes
+                    ctypes.windll.user32.MessageBoxW(
+                        0,
+                        error_msg,
+                        f"{APP_NAME} - Instance Already Running",
+                        0x10 | 0x0  # MB_ICONERROR | MB_OK
+                    )
+                except Exception:
+                    pass
+            sys.exit(1)
+        
         # Initialize commercial protection
         # PyInstaller sets sys.frozen, Nuitka sets __compiled__
         is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
@@ -10859,6 +11019,9 @@ def main():
                             logger.info("Commercial protection cleaned up")
                         except Exception as e:
                             logger.warning(f"Protection cleanup warning: {e}")
+                    
+                    # Release instance lockfile
+                    release_instance_lock()
                     
                     # Perform comprehensive cleanup
                     app.cleanup()
