@@ -305,6 +305,7 @@ def acquire_instance_lock():
             # On Windows, we need to handle file locking differently
             if platform.system() == "Windows":
                 # Windows: try to open with exclusive access
+                _lockfile_handle = None
                 try:
                     _lockfile_handle = open(LOCK_FILE, 'x')
                     _lockfile_handle.write(lock_data)
@@ -315,8 +316,18 @@ def acquire_instance_lock():
                     # Another instance created it between our check and creation
                     logger.warning("Another instance started while acquiring lock")
                     return False
+                except Exception:
+                    # Any other exception (write/flush failures, etc.) - close handle before propagating
+                    if _lockfile_handle:
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
+                        _lockfile_handle = None
+                    raise
             else:
                 # Unix-like: use fcntl for proper file locking
+                _lockfile_handle = None
                 try:
                     import fcntl
                     _lockfile_handle = open(LOCK_FILE, 'w')
@@ -328,10 +339,22 @@ def acquire_instance_lock():
                 except (IOError, BlockingIOError):
                     # Lock is held by another process
                     if _lockfile_handle:
-                        _lockfile_handle.close()
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
                         _lockfile_handle = None
                     logger.warning("Could not acquire lock - another instance may be running")
                     return False
+                except Exception:
+                    # Any other exception (fcntl failures, write/flush failures, etc.) - close handle before propagating
+                    if _lockfile_handle:
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
+                        _lockfile_handle = None
+                    raise
         except (IOError, OSError, PermissionError) as e:
             logger.error(f"Failed to create lockfile: {e}")
             # Don't block execution if we can't create lockfile
