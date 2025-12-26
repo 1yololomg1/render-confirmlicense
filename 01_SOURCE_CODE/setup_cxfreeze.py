@@ -116,11 +116,7 @@ build_exe_options = {
         
         "numpy",
         "numpy.core",
-        "numpy.core._methods",
-        "numpy.core.multiarray",
-        "numpy.core.numeric",
         "numpy.lib",
-        "numpy.lib.format",
         "numpy.linalg",
         "numpy.fft",
         "numpy.random",
@@ -238,9 +234,6 @@ build_exe_options = {
         "http.client",
         
         # Numpy internals that sometimes get missed
-        "numpy.core._methods",
-        "numpy.core.multiarray",
-        "numpy.core.numeric",
         "numpy.lib.format",
         "numpy.f2py",
         
