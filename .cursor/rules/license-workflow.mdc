@@ -1,5 +1,5 @@
 ---
-description: Defines the complete license lifecycle management process including creation, validation, revocation and status transitions
+description: Documentation and implementation details for software license management lifecycle and workflows
 ---
 
 # === USER INSTRUCTIONS ===
@@ -287,49 +287,53 @@ $END$
 # license-workflow
 
 ## License Lifecycle States
-- Active: Valid and bound to specific machine
-- Inactive: Created but not yet bound
-- Revoked: Permanently invalidated
-- Expired: Past valid duration
-
+- Active: Valid license with correct machine binding
+- Revoked: Administratively disabled with tracked revocation reason
+- Expired: Time-based validation failed
+- Invalid: Failed machine binding or tampering detection
 Importance Score: 85/100
 
-## Validation Rules
-- Machine binding verification required
-- License key format: 3-part structure with colon separators 
-- Environment validation checks:
-  - Virtual machine detection (warning level)
-  - Sandbox detection (critical level)
-  - Process scanning for debuggers
-- Runtime integrity monitoring every 30 seconds
-
+## License Creation and Issuance
+- Tiered license generation (Professional/Enterprise/Trial)
+- Machine fingerprint binding at activation
+- Duplicate installation prevention system
+- Development vs Production mode differentiation
 Importance Score: 80/100
 
-## Management Operations
-Located in `/DOCUMENTATION_AND_NOTES/license_admin_secure.html`:
+## Validation Workflow
+1. Multi-factor validation sequence:
+   - License key verification
+   - Machine ID binding check
+   - Expiration validation
+2. Runtime integrity monitoring
+3. Anti-tampering verification
+4. Virtual machine detection
+Location: 01_SOURCE_CODE/protection_module.py
+Importance Score: 90/100
 
-- Machine ID binding and validation
-- Status transitions (activate/deactivate/revoke)
-- Duration extension
-- Usage monitoring
-- Duplicate machine detection
-- Server-first authentication required for admin access
-
+## Revocation Process
+1. Administrative revocation through secure dashboard
+2. Real-time status propagation
+3. Reason tracking and audit logging
+4. Automatic client-side enforcement
+Location: DOCUMENTATION_AND_NOTES/license_admin_secure.html
 Importance Score: 75/100
 
-## Protection Mechanisms
-Located in `/01_SOURCE_CODE/protection_module.py`:
+## License Migration
+1. Machine binding verification
+2. Duplicate installation detection
+3. Transfer approval workflow
+4. Previous installation deactivation
+Location: 02_SERVER/check_license.mjs
+Importance Score: 70/100
 
-- Continuous runtime monitoring
-- Memory tampering detection
-- API hook prevention
-- Execution path validation
-- License data integrity checks
-- Violation categorization:
-  - Critical: Immediate termination
-  - Warning: Logging only
-
-Importance Score: 85/100
+## Status Monitoring
+- Real-time license status dashboard
+- Usage analytics and statistics
+- Machine binding management
+- Violation tracking with severity levels
+Location: DOCUMENTATION_AND_NOTES/license_admin_secure.html
+Importance Score: 65/100
 
 $END$
 

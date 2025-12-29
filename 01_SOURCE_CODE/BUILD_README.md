@@ -1,5 +1,11 @@
 # CONFIRM Build Output Explanation
 
+## Important: NumPy Version Constraint
+
+**⚠️ IMPORTANT:** This project uses **numpy 1.x** (currently pinned to `>=1.24.0,<2.0.0`). 
+
+NumPy 2.x is **NOT compatible** with cx_Freeze and will cause build failures with "RuntimeError: object already has a different docstring". See `BUILD_FIX_NUMPY_2X.md` for details.
+
 ## Understanding cx_Freeze Build Structure
 
 When you build CONFIRM.exe using cx_Freeze, the output structure may seem confusing at first, but it's working correctly!

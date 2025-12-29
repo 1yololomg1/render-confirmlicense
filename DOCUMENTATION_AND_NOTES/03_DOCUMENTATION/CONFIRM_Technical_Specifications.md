@@ -183,19 +183,6 @@ Unauthorized copying, distribution, or modification of this Software is strictly
 - **Console Logging**: Standard output
 - **Format**: Timestamp - Logger - Level - Message
 
-### **Build Information**
-
-#### **Build Tools**
-- **PyInstaller**: Executable creation
-- **UPX**: Executable compression
-- **Custom Obfuscation**: Code protection
-- **Commercial Protection**: Anti-debugging and anti-tampering
-
-#### **Executable Properties**
-- **File Size**: ~81 MB
-- **Compression**: UPX compressed
-- **Protection**: Commercial-grade obfuscation
-- **Dependencies**: All included (standalone)
 
 > Operational teams maintain the secure activation infrastructure separately. End users only interact with the validation features described in this document.
 

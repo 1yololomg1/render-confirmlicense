@@ -9,7 +9,12 @@ echo ========================================
 echo CONFIRM Build Script
 echo ========================================
 echo.
-echo Starting...
+echo Cleaning previous builds...
+if exist build rmdir /s /q build >nul 2>&1
+if exist dist rmdir /s /q dist >nul 2>&1
+echo Cleanup complete.
+echo.
+echo Starting build...
 echo.
 
 python setup_cxfreeze.py build
