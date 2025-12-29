@@ -1,5 +1,5 @@
 ---
-description: Technical specification for software license data models, types and hardware binding implementation
+description: Core licensing data models and business rules for software protection and validation system
 ---
 
 # === USER INSTRUCTIONS ===
@@ -233,42 +233,43 @@ $END$
 
 # license-models
 
-## License Types and Bindings
+## License Types
+- Professional: Standard commercial license tier
+- Enterprise: Advanced features and capabilities
+- Trial: Time-limited evaluation access
 Importance Score: 85/100
 
-The licensing system implements machine-specific binding with the following key components:
-
-- Machine ID generation and validation
-- Support for multiple license tiers (active/inactive/revoked states)
-- Prevention of duplicate active licenses per machine
-- License key structure: 3-part format separated by colons
-- Hardware binding validation during runtime checks
-
-## License Validation Rules
+## Machine Binding Model
+Core license-to-hardware binding system implemented in protection_module.py:
+- Unique machine fingerprinting
+- Hardware identifier generation
+- Duplicate installation detection
+- Runtime binding verification
 Importance Score: 80/100
 
-Core validation requirements:
-- Machine binding verification
-- Expiration date checking  
-- Revocation status validation
-- File size limits (1MB - 500MB)
-- Path restrictions for license files
-- 30-second interval continuous validation
-
-## Administration Model
+## License Validation Schema
+Multi-factor validation structure in check_license.mjs:
+- License key verification
+- Machine ID validation
+- Expiration date checking
+- Status verification (active/revoked)
 Importance Score: 75/100
 
-License management capabilities:
-- Machine ID lookup and binding status
-- License activation/deactivation controls
-- Duration modification
-- Usage statistics tracking
-- Multiple machine detection
-- Server-first authentication for admin access
+## License Status Tracking
+Real-time monitoring system in license_admin_secure.html:
+- Active/Inactive state management
+- Revocation tracking with reason codes
+- Usage analytics and statistics
+- License violation logging
+Importance Score: 70/100
 
-Key Files:
-- 01_SOURCE_CODE/protection_module.py: Core license validation
-- DOCUMENTATION_AND_NOTES/license_admin_secure.html: Management interface
+## Protection States
+Environmental state management in protection_module.py:
+- Development mode validation
+- Production environment detection
+- Build environment verification
+- Integrity monitoring states
+Importance Score: 75/100
 
 $END$
 

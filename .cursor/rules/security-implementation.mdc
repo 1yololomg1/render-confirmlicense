@@ -1,5 +1,5 @@
 ---
-description: Analysis of custom security implementations, anti-tampering mechanisms, and license protection systems
+description: Analyzes security implementation aspects including anti-tampering, VM detection, and cryptographic validation mechanisms
 ---
 
 # === USER INSTRUCTIONS ===
@@ -319,46 +319,49 @@ $END$
 
 # security-implementation
 
-Multi-layer security architecture consisting of:
+## Core Protection Components
 
-## Protection Core (01_SOURCE_CODE/protection_module.py)
+### Anti-Tampering System (01_SOURCE_CODE/protection_module.py)
+- Runtime integrity monitoring to detect code modifications
+- Custom anti-debugging mechanisms for preventing analysis
+- Protection state management with build environment validation
+- Machine fingerprinting mechanisms for binding verification
 Importance Score: 90/100
 
-Anti-Tampering Layer:
-- Process scanning for debugger detection
-- Memory patch monitoring
-- API hook prevention mechanisms
-- Runtime integrity validation via executable checksums
-- Continuous path validation against whitelisted locations
+### Virtual Machine Detection
+- Sandbox environment detection logic
+- VM platform identification and blocking
+- Environment analysis for security validation
+Importance Score: 85/100
 
-Environment Detection:
-- VM detection via hardware fingerprinting
-- Sandbox environment identification
-- Critical violation triggers for sandbox detection
-- Warning-level alerts for VM execution
+### License Validation Security (02_SERVER/check_license.mjs)
+- Multi-factor license validation combining:
+  - License key verification
+  - Machine ID validation
+  - Expiration state checking
+- Duplicate usage detection mechanisms
+- Real-time revocation checking
+Importance Score: 80/100
 
-License Security:
-- Machine-specific binding validation
-- Triple-part key structure (format: xxx:xxx:xxx)
-- Revocation status verification
-- File integrity checks with size constraints (1MB-500MB)
-- 30-second interval runtime monitoring cycles
+## Security Response Mechanisms
 
-## Administrative Controls (DOCUMENTATION_AND_NOTES/license_admin_secure.html)
+### Violation Handling
+- Severity-based response system for security breaches
+- Customized handling of different tampering attempts
+- Automated response to protection violations
 Importance Score: 75/100
 
-Server Authentication:
-- Server-first authentication protocol
-- Machine ID validation system
-- Duplicate machine detection logic
-- License state management (active/inactive/revoked)
-- Usage monitoring with statistical tracking
+### Machine Binding Protection
+- Hardware-level fingerprinting
+- Binding verification with tamper protection
+- Duplicate installation detection
+Importance Score: 85/100
 
-Protection Classifications:
-- Critical violations trigger immediate termination
-- Warning violations generate logs
-- Machine binding verification
-- License expiration enforcement
+### Build Environment Security
+- Development vs. Production mode protection logic
+- Build-time security parameter validation
+- Environment-specific security controls
+Importance Score: 70/100
 
 $END$
 

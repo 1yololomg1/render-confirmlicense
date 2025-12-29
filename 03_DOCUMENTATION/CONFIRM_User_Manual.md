@@ -107,43 +107,46 @@ CONFIRM Statistical Validation Engine is a professional statistical analysis pla
 4. Click "Load Selected Sheets"
 
 ##### Understanding the Expected Excel Layout
-Users most often run into trouble at this step because their contingency tables are formatted like standard spreadsheets with headers at the top or text identifiers in the first column. CONFIRM expects a compact matrix layout that looks more like numerical output than a traditional report.
+CONFIRM expects a standard spreadsheet format with headers in the first row and sequential integers in the first data column.
+
+**CORRECT FORMAT:**
 
 ```
-Row 1: [empty]  [empty]     [empty]      [empty]
-Row 2: 1        45          12           3
-Row 3: 2        73          27           5
-Row 4: 3        52          38           8
-Row 5: 4        31          42           12
-Row 6: Category Type_A      Type_B       Type_C
+Row 1: Neuron    Shale    Wet Sand    Tight Sand    Gas Sand
+Row 2: 1         45       12          3             0
+Row 3: 2         73       27          5             0
+Row 4: 3         52       38          8             0
+Row 5: 4         31       42          12            0
 ```
 
-- **Row 1** should be blank (or contain null/NaN values). It acts as a spacer for the bottom headers.
-- **Column A** must contain sequential integers (1, 2, 3, ...). Text such as "Supplier A" or "Category_1" will cause the file to be rejected.
-- **Columns B onward** must contain purely numeric values (counts or proportions). Mixed text/numeric data triggers validation errors.
-- **Last row** can include optional category labels. CONFIRM reads them after the data block is processed.
-- **Headers sit at the bottom**, not the top, so the matrix can be parsed consistently.
+- **Row 1** must contain column headers. The first column header should be "Neuron" (or "Unit", "SOM_Unit", "Cell", "Node"), followed by category/class name headers.
+- **Column A** (starting from Row 2) must contain sequential integers (1, 2, 3, ...). Text such as "Supplier A" or "Category_1" will cause the file to be rejected.
+- **Columns B onward** (starting from Row 2) must contain purely numeric values (counts or proportions). Mixed text/numeric data triggers validation errors.
+- **Preferably no empty cells** - use 0 (zero) instead of leaving cells blank.
 
 ###### Examples of formats that will be rejected
 
 ```
-Row 1: Category   Type_A   Type_B   Type_C
-Row 2: Supplier_A 45       12       3
-Row 3: Supplier_B 73       27       5
+Row 1: Neuron    Shale    Wet Sand    Tight Sand
+Row 2: Supplier_A 45       12          3
+Row 3: Supplier_B 73       27          5
 ```
-(Text in the first column prevents the sheet from loading.)
+(Text in the first column prevents the sheet from loading. Column A must contain sequential integers, not text identifiers.)
 
 ```
-Row 1: ID        Type_A   Type_B   Type_C
-Row 2: 1         45       12       3
+Row 1: Neuron    Shale    Wet Sand    Tight Sand
+Row 2: 1         45       12         "N/A"
+Row 3: 2         73       27         "missing"
 ```
-(Headers at the top cause the parser to misalign the rows.)
+(Mixed text and numeric values in data cells stop the statistical routines. All data cells must contain only numbers.)
 
 ```
-Row 1: 1         45       12       "N/A"
-Row 2: 2         73       27       "missing"
+Row 1: [empty]   [empty]  [empty]    [empty]
+Row 2: 1         45       12         3
+Row 3: 2         73       27         5
+Row 4: Category   Shale    Wet Sand   Tight Sand
 ```
-(Mixed text and numeric values stop the statistical routines.)
+(Missing headers in Row 1 will cause parsing errors. Headers must be in the first row.)
 
 #### **Step 2: Configure Analysis**
 1. Choose analysis type (single sheet or batch)

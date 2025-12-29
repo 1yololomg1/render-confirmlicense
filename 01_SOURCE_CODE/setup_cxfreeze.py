@@ -30,6 +30,10 @@ from cx_Freeze import setup, Executable
 from pathlib import Path
 import glob
 
+# Increase recursion limit to handle numpy's complex import structure
+# This helps prevent "RecursionError" during freezing
+sys.setrecursionlimit(sys.getrecursionlimit() * 5)
+
 # =============================================================================
 # VERIFIED REQUIRED PACKAGES (from actual imports)
 # =============================================================================
@@ -115,11 +119,9 @@ build_exe_options = {
         "pandas.io.excel._base",
         
         "numpy",
-        "numpy.core",
-        "numpy.lib",
-        "numpy.linalg",
-        "numpy.fft",
-        "numpy.random",
+        # IMPORTANT: Only include "numpy" - do NOT include numpy.core or other subpackages
+        # numpy 2.x with cx_Freeze has docstring conflicts when subpackages are explicitly listed
+        # Let numpy handle its own internal imports automatically
         
         "scipy",
         "scipy.stats",
@@ -233,9 +235,8 @@ build_exe_options = {
         # HTTP modules for requests/urllib3
         "http.client",
         
-        # Numpy internals that sometimes get missed
-        "numpy.lib.format",
-        "numpy.f2py",
+        # Numpy internals - only include if absolutely necessary
+        # Note: numpy 2.x handles most internal imports automatically
         
         # Scipy special functions and internals
         "scipy.special.cython_special",

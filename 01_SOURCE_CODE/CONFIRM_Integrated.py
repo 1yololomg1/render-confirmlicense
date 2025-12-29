@@ -404,6 +404,96 @@ def mask_license_key(license_key: Optional[str]) -> str:
     return f"{sanitized[:LICENSE_MASK_PREFIX_LENGTH]}***{sanitized[-LICENSE_MASK_SUFFIX_LENGTH:]}"
 
 
+def get_safe_initial_directory():
+    """
+    Get a safe initial directory for file dialogs.
+    Tries Desktop first, then Documents, then home directory.
+    Returns a path that exists and is accessible.
+    """
+    try:
+        home = Path.home()
+        
+        # Try Desktop first (most common user expectation)
+        desktop = home / "Desktop"
+        if desktop.exists() and desktop.is_dir():
+            return str(desktop)
+        
+        # Try Documents as fallback
+        documents = home / "Documents"
+        if documents.exists() and documents.is_dir():
+            return str(documents)
+        
+        # Fall back to home directory
+        if home.exists() and home.is_dir():
+            return str(home)
+        
+        # Last resort: current working directory
+        return os.getcwd()
+    except Exception as e:
+        logger.warning(f"Could not determine safe initial directory: {e}, using current directory")
+        return os.getcwd()
+
+
+def retry_network_request(request_func, max_retries=3, base_delay=1.0, max_delay=10.0):
+    """
+    Retry a network request with exponential backoff.
+    
+    Args:
+        request_func: Function that makes the network request (should return response or raise exception)
+        max_retries: Maximum number of retry attempts (default: 3)
+        base_delay: Initial delay in seconds (default: 1.0)
+        max_delay: Maximum delay in seconds (default: 10.0)
+    
+    Returns:
+        Response object if successful
+        
+    Raises:
+        The last exception if all retries fail
+    """
+    import time
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return request_func()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_exception = e
+            if attempt < max_retries:
+                # Exponential backoff: delay = base_delay * (2 ^ attempt), capped at max_delay
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.warning(f"Network request failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                logger.info(f"Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+            else:
+                logger.error(f"Network request failed after {max_retries + 1} attempts: {e}")
+        except requests.exceptions.RequestException as e:
+            # Don't retry on non-retryable errors (like 4xx client errors)
+            if isinstance(e, (requests.exceptions.HTTPError)) and hasattr(e.response, 'status_code'):
+                status = e.response.status_code
+                if 400 <= status < 500:
+                    # Client errors (4xx) shouldn't be retried
+                    logger.error(f"Client error (HTTP {status}): {e}")
+                    raise
+            # Retry other request exceptions
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.warning(f"Request error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                logger.info(f"Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+            else:
+                logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+        except Exception as e:
+            # Don't retry on unexpected exceptions
+            logger.error(f"Unexpected error in network request: {e}")
+            raise
+    
+    # If we get here, all retries failed
+    if last_exception:
+        raise last_exception
+    raise Exception("Network request failed with unknown error")
+
+
 def is_within_offline_grace_period(last_validated):
     """Check if last validation is within grace period"""
     if not last_validated:
@@ -690,7 +780,7 @@ def get_firebase_auth_token(require: bool = True) -> Optional[str]:
 
 
 def bind_license_to_computer(license_key, computer_id):
-    """Automatically binds license to computer in Firebase database"""
+    """Automatically binds license to computer in Firebase database with retry logic"""
     masked_license = mask_license_key(license_key)
     logger.info(f"Automatically binding license {masked_license} to computer {computer_id}")
     
@@ -699,10 +789,14 @@ def bind_license_to_computer(license_key, computer_id):
         url = f"{FIREBASE_URL}/license/{license_key}.json"
         auth_token = get_firebase_auth_token()
         params = {'auth': auth_token} if auth_token else None
-
-        # First get existing license data
-        response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        
+        # First get existing license data with retry
+        def get_license_data():
+            response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
+        
+        response = retry_network_request(get_license_data, max_retries=2, base_delay=1.0, max_delay=5.0)
         
         license_data = response.json()
         if not license_data:
@@ -716,22 +810,33 @@ def bind_license_to_computer(license_key, computer_id):
         license_data['binding_method'] = 'automatic'
         license_data['machine_info'] = machine_info
         
-        # Update the license in Firebase
-        response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        # Update the license in Firebase with retry
+        def update_license():
+            response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
+        
+        retry_network_request(update_license, max_retries=2, base_delay=1.0, max_delay=5.0)
         
         logger.info(f"Successfully bound license {masked_license} to computer {computer_id}")
         return True
         
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout binding license {masked_license} - server may be unreachable or slow")
+        return False
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection failed binding license {masked_license}: {e}")
+        logger.error("Possible causes: no internet, firewall blocking, or server down")
+        return False
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to bind license {masked_license}: {e}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error binding license {masked_license}: {e}")
+        logger.error(f"Unexpected error binding license {masked_license}: {e}", exc_info=True)
         return False
 
 def check_license_with_fingerprint(license_key):
-    """Enhanced license validation with comprehensive error handling and logging"""
+    """Enhanced license validation with comprehensive error handling, retry logic, and logging"""
     if not license_key or not license_key.strip():
         logger.error("Empty or invalid license key provided")
         return {"valid": False, "reason": "Invalid license key format"}
@@ -745,12 +850,16 @@ def check_license_with_fingerprint(license_key):
         url = f"{LICENSE_SERVER_URL}/validate"
         logger.debug(f"Checking license for key {masked_license}")
         
-        # Make request to Render server
-        response = requests.post(url, 
-                               headers={'Content-Type': 'application/json'},
-                               json={'license_key': license_key.strip(), 'machine_id': computer_id},
-                               timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()  # Raise exception for HTTP errors
+        # Make request to Render server with retry logic
+        def make_request():
+            response = requests.post(url, 
+                                   headers={'Content-Type': 'application/json'},
+                                   json={'license_key': license_key.strip(), 'machine_id': computer_id},
+                                   timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()  # Raise exception for HTTP errors
+            return response
+        
+        response = retry_network_request(make_request, max_retries=3, base_delay=1.0, max_delay=10.0)
         
         data = response.json()
         logger.debug(f"License validation response: {bool(data)}")
@@ -770,29 +879,45 @@ def check_license_with_fingerprint(license_key):
         
     except SecurityError as sec_err:
         logger.error(f"Security configuration error during license validation: {sec_err}")
-        return {"valid": False, "reason": str(sec_err)}
+        return {"valid": False, "reason": f"Configuration error: {str(sec_err)}"}
 
     except requests.exceptions.Timeout:
-        logger.error(f"License validation timeout after {NETWORK_REQUEST_TIMEOUT}s - server may be unreachable")
-        logger.error("Possible causes: slow network, firewall blocking, or server issues")
+        logger.error(f"License validation timeout after {NETWORK_REQUEST_TIMEOUT}s (with retries)")
+        logger.error("Possible causes: slow network connection, firewall blocking HTTPS, or server overload")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
     except requests.exceptions.SSLError as e:
         logger.error(f"SSL/TLS error during license validation: {e}")
-        logger.error("Possible causes: certificate issues, antivirus interfering, or proxy problems")
-        return {"valid": False, "reason": "SSL/security error - check network configuration"}
+        logger.error("Possible causes: outdated certificates, antivirus interfering, proxy configuration, or system date/time incorrect")
+        return {"valid": False, "reason": "SSL/security error - please check your network configuration and system date/time"}
     
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"License validation connection failed: {e}")
-        logger.error("Possible causes: no internet, firewall blocking, DNS issues, or server down")
+        logger.error(f"License validation connection failed after retries: {e}")
+        logger.error("Possible causes: no internet connection, firewall blocking HTTPS (port 443), DNS resolution failure, or license server is down")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if hasattr(e, 'response') and e.response else "unknown"
+        logger.error(f"License validation HTTP error {status_code}: {e}")
+        if status_code == 503:
+            logger.error("Server is temporarily unavailable - please try again later")
+            return check_offline_grace_period()
+        elif status_code == 500:
+            logger.error("Server error occurred - please try again later or contact support")
+            return check_offline_grace_period()
+        else:
+            return {"valid": False, "reason": f"Server error (HTTP {status_code})"}
+    
     except requests.exceptions.RequestException as req_error:
-        logger.error(f"License validation request failed: {req_error}")
+        logger.error(f"License validation request failed after retries: {req_error}")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
     except Exception as e:
-        logger.error(f"Unexpected error during license validation for {masked_license}: {e}")
+        logger.error(f"Unexpected error during license validation for {masked_license}: {e}", exc_info=True)
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
 
 
@@ -4418,13 +4543,38 @@ class ProfessionalVisualizationDesigner:
 designer = ProfessionalVisualizationDesigner()
 
 class NumpyEncoder(json.JSONEncoder):
-    """Custom JSON encoder for numpy types"""
+    """Custom JSON encoder for numpy types and other non-serializable objects"""
     def default(self, obj):
-        if hasattr(obj, 'item'):
-            return obj.item()  # Convert numpy scalars to Python types
+        # Handle NumPy integer types
+        if isinstance(obj, np.integer):
+            return int(obj)
+        # Handle NumPy floating point types
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        # Handle NumPy arrays
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        # Handle NumPy booleans
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        # Handle regular Python booleans that might be wrapped
+        elif isinstance(obj, bool):
+            return bool(obj)
+        # Handle datetime objects
+        elif isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        # Fallback: duck-typing approach (original method)
+        elif hasattr(obj, 'item'):
+            return obj.item()
         elif hasattr(obj, 'tolist'):
-            return obj.tolist()  # Convert numpy arrays to lists
-        return super().default(obj)
+            return obj.tolist()
+        # Final fallback: convert to string and log
+        else:
+            try:
+                return super().default(obj)
+            except TypeError:
+                logging.warning(f"Unable to serialize object of type {type(obj)}, converting to string: {str(obj)[:100]}")
+                return str(obj)
 
 
 class SheetSelectionConfig:
@@ -4913,34 +5063,6 @@ class StatisticalAnalyzer:
             self.handle_error(f"Failed to start batch processing: {str(e)}", e, "Thread submission")
             self.set_processing_state(False)
     
-    def _process_single_sheet(self, sheet_name):
-        """Process a single sheet with comprehensive error handling"""
-        try:
-            if not self.excel_file:
-                return None
-                
-            # Load sheet data
-            sheet_data = pd.read_excel(self.excel_file, sheet_name=sheet_name)
-            
-            if sheet_data.empty:
-                logger.warning(f"Sheet {sheet_name} is empty")
-                return None
-            
-            # Perform analysis (this would call your existing analysis methods)
-            # For now, return a placeholder result structure
-            results = {
-                'sheet_name': sheet_name,
-                'data_shape': sheet_data.shape,
-                'confusion_matrix': None,  # Would be populated by actual analysis
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error processing sheet {sheet_name}: {e}")
-            return None
-    
     def export_results(self):
         """Export analysis results to various formats"""
         try:
@@ -4963,7 +5085,7 @@ class StatisticalAnalyzer:
                     ("Text files", "*.txt"),
                     ("All files", "*.*")
                 ],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -5008,10 +5130,13 @@ class StatisticalAnalyzer:
                     chi2_p_value = result.get('chi2_p_value', 1.0)
                     total_observations = result.get('total_observations', 0)
                     
-                    # Get chi2 from QC summary (it calculates it)
-                    chi2 = qc_summary.get('chi2', 0)
-                    if chi2 == 0 and 'chi2' not in qc_summary:
-                        # Fallback: calculate chi2 if not in QC summary
+                    # Get chi2_statistic from result or QC summary
+                    chi2 = result.get('chi2_statistic', 0)
+                    if chi2 == 0:
+                        # Try QC summary (uses chi2_statistic key)
+                        chi2 = qc_summary.get('chi2_statistic', 0)
+                    if chi2 == 0:
+                        # Fallback: calculate chi2 if not available
                         try:
                             from scipy.stats import chi2_contingency
                             matrix = result.get('confusion_matrix')
@@ -5097,7 +5222,7 @@ class StatisticalAnalyzer:
             # Get save directory
             save_dir = filedialog.askdirectory(
                 title="Select Directory to Save Charts",
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not save_dir:
@@ -5331,8 +5456,8 @@ class StatisticalAnalyzer:
         width = 0.25
         
         ax.bar(x - width, precisions, width, label='Precision', color='skyblue', edgecolor='navy')
-        ax.bar(x, recalls, width, label='Recall', color='lightcoral', edgecolor='darkred')
-        ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightgreen', edgecolor='darkgreen')
+        ax.bar(x, recalls, width, label='Recall', color='lightgreen', edgecolor='darkgreen')
+        ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightcoral', edgecolor='darkred')
         
         ax.set_ylabel('Score')
         ax.set_xlabel('Class')
@@ -5835,7 +5960,7 @@ class StatisticalAnalyzer:
                     ("Text files", "*.txt"),
                     ("All files", "*.*")
                 ],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -6036,7 +6161,7 @@ class StatisticalAnalyzer:
                     ("JSON files", "*.json"),
                     ("All files", "*.*")
                 ],
-                initialdir="C:/Users/Desktop"
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -6147,14 +6272,25 @@ class StatisticalAnalyzer:
             # Save the file
             file_ext = filename.lower().split('.')[-1]
             
+            # Try to serialize first to catch any errors before writing to file
+            try:
+                test_json = json.dumps(project_data, cls=NumpyEncoder)
+                # If we got here, serialization works
+            except Exception as test_error:
+                self.update_activity_indicator("Save failed")
+                error_msg = f"Cannot convert data to JSON format:\n{str(test_error)}\n\nPlease report this error."
+                messagebox.showerror("Serialization Error", error_msg)
+                logging.error(f"JSON serialization test failed: {test_error}", exc_info=True)
+                return
+            
             if file_ext == 'json':
-                # Save as JSON
+                # Save as JSON with NumPy encoder
                 with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
+                    json.dump(project_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             else:
-                # Save as deltaV solutions project file (JSON format)
+                # Save as TraceSeis project file (JSON format) with NumPy encoder
                 with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
+                    json.dump(project_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             
             # Update current project reference
             self.current_project = filename
@@ -6167,9 +6303,16 @@ class StatisticalAnalyzer:
                               f"Sheets saved: {len(self.batch_results)}\n"
                               f"Successful analyses: {project_data['metadata']['successful_analyses']}")
             
+        except TypeError as e:
+            # Specific handler for JSON serialization errors
+            self.update_activity_indicator("Save failed")
+            error_msg = f"Data serialization error:\n{str(e)}\n\nThis may be due to incompatible data types in the analysis results."
+            messagebox.showerror("Save Error", error_msg)
+            logging.error(f"JSON serialization error during save: {e}", exc_info=True)
         except Exception as e:
             self.update_activity_indicator("Save failed")
             messagebox.showerror("Save Error", f"Failed to save project:\n{str(e)}")
+            logging.error(f"Project save error: {e}", exc_info=True)
     
     def load_project(self):
         """Load a saved project file"""
@@ -6185,7 +6328,7 @@ class StatisticalAnalyzer:
                     ("JSON files", "*.json"),
                     ("All files", "*.*")
                 ],
-                initialdir="C:/Users/Desktop"
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -6271,7 +6414,11 @@ class StatisticalAnalyzer:
                     if 'confusion_matrix' in result_data:
                         matrix_data = result_data['confusion_matrix']
                         if matrix_data:
-                            result['confusion_matrix'] = np.array(matrix_data)
+                            try:
+                                result['confusion_matrix'] = np.array(matrix_data)
+                            except Exception as matrix_error:
+                                logger.warning(f"Could not convert confusion matrix to numpy array for '{sheet_name}': {matrix_error}")
+                                result['confusion_matrix'] = None
                     
                     # Store QC summary if available
                     if 'qc_summary' in result_data:
@@ -8274,7 +8421,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         filename = filedialog.askopenfilename(
             title="Select Excel File (Contingency Table or Confusion Matrix)",
             filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")],
-            initialdir="C:/Users",
+            initialdir=get_safe_initial_directory(),
             defaultextension=".xlsx"
         )
         
@@ -9451,6 +9598,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 global_fit = (diagonal_sum / total_observations) * 100
             
             # Cramer's V
+            chi2 = 0
+            p_value = 1
             try:
                 chi2, p_value, dof, expected = chi2_contingency(matrix)
                 n = total_observations
@@ -9462,6 +9611,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                     cramers_v = 0
             except:
                 cramers_v = 0
+                chi2 = 0
                 p_value = 1
             
             # Percent Zero Entries (inactive units)
@@ -9516,6 +9666,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 'cramers_v': cramers_v,
                 'percent_undefined': percent_undefined,
                 'data_completeness': data_completeness,
+                'chi2_statistic': chi2,
                 'chi2_p_value': p_value,
                 'matrix_shape': confusion_matrix.shape,
                 'confusion_matrix': confusion_matrix,
@@ -9544,6 +9695,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 'Active_Neurons': results['active_neurons'],
                 'Total_Neurons': results['total_neurons'],
                 'Utilization': (results['active_neurons'] / results['total_neurons']) * 100,
+                'Chi2_Statistic': results.get('chi2_statistic', 0),
                 'P_Value': results['chi2_p_value']
             })
         
@@ -9557,7 +9709,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         # Reorder columns for better display
         column_order = ['Rank', 'SOM_Config', 'Global_Fit', 'Cramers_V', 
                        'Percent_Zero_Entries', 'Total_Samples', 'Active_Neurons', 
-                       'Total_Neurons', 'Utilization', 'P_Value']
+                       'Total_Neurons', 'Utilization', 'Chi2_Statistic', 'P_Value']
         self.comparison_summary = self.comparison_summary[column_order]
     
     def update_single_sheet_results_display(self, sheet_name):
@@ -9597,6 +9749,7 @@ Inactive {unit_term}: {sheet_results['total_neurons'] - sheet_results['active_ne
 PERFORMANCE METRICS:
 Global Fit (Classification Accuracy): {sheet_results['global_fit']:.2f}%
 Association Strength (Cramer's V): {sheet_results['cramers_v']:.4f}
+Chi-Square Statistic: {sheet_results.get('chi2_statistic', 0):.2f}
 Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
 {utilization_term}: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
 
@@ -9643,6 +9796,7 @@ Association Strength: {association_grade}
 • {utilization_desc}
 
 Statistical Significance:
+• Chi-Square Statistic: {sheet_results.get('chi2_statistic', 0):.2f}
 • Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
 • {'Statistically significant' if sheet_results['chi2_p_value'] < 0.05 else 'Not statistically significant'} at α=0.05
 """
@@ -10429,7 +10583,7 @@ QUALITY DISTRIBUTION:
                 title="Export QC Report",
                 defaultextension=".txt",
                 filetypes=[("Text files", "*.txt"), ("CSV files", "*.csv"), ("All files", "*.*")],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
