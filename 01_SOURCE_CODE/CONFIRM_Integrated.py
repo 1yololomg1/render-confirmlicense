@@ -118,6 +118,7 @@ else:
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
 LOG_FILE = CONFIG_DIR / "confirm.log"
+LOCK_FILE = CONFIG_DIR / "confirm.lock"
 
 # Timeout and Performance Constants
 NETWORK_REQUEST_TIMEOUT = int(os.getenv("CONFIRM_NETWORK_TIMEOUT", "15"))
@@ -138,7 +139,7 @@ __contact__ = "info@traceseis.com"
 # Ensure configuration directory exists with robust error handling
 def ensure_config_directory():
     """Create config directory with multiple fallback options"""
-    global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE
+    global CONFIG_DIR, SETTINGS_FILE, LICENSE_FILE, LOG_FILE, LOCK_FILE
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         return True
@@ -152,6 +153,7 @@ def ensure_config_directory():
             SETTINGS_FILE = CONFIG_DIR / "settings.json"
             LICENSE_FILE = CONFIG_DIR / "confirm_license.json"
             LOG_FILE = CONFIG_DIR / "confirm.log"
+            LOCK_FILE = CONFIG_DIR / "confirm.lock"
             print(f"WARNING: Could not create config directory in AppData, using: {CONFIG_DIR}")
             print(f"Error: {e}")
             return True
@@ -228,6 +230,163 @@ else:
     else:
         logger.warning("Protection module not available - commercial protection disabled")
 
+# Single-instance lockfile management
+_lockfile_handle = None
+
+def acquire_instance_lock():
+    """
+    Acquire a lockfile to prevent multiple instances from running simultaneously.
+    Returns True if lock acquired successfully, False if another instance is running.
+    """
+    global _lockfile_handle
+    
+    try:
+        # Check if lockfile exists and if the process is still running
+        if LOCK_FILE.exists():
+            try:
+                # Read PID from lockfile
+                with open(LOCK_FILE, 'r') as f:
+                    lock_data = f.read().strip()
+                    if lock_data:
+                        parts = lock_data.split(':', 1)
+                        if len(parts) == 2:
+                            pid_str, timestamp_str = parts
+                            try:
+                                pid = int(pid_str)
+                                # Check if process is still running
+                                if platform.system() == "Windows":
+                                    # Windows: use tasklist to check if process exists
+                                    import subprocess
+                                    try:
+                                        result = subprocess.run(
+                                            ['tasklist', '/FI', f'PID eq {pid}'],
+                                            capture_output=True,
+                                            text=True,
+                                            timeout=2
+                                        )
+                                        if str(pid) in result.stdout:
+                                            # Process is still running
+                                            logger.warning(f"Another instance detected (PID: {pid})")
+                                            return False
+                                    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                                        # Can't verify, assume stale lock
+                                        pass
+                                else:
+                                    # Unix-like: use os.kill with signal 0 to check process
+                                    try:
+                                        os.kill(pid, 0)
+                                        # Process is still running
+                                        logger.warning(f"Another instance detected (PID: {pid})")
+                                        return False
+                                    except (OSError, ProcessLookupError):
+                                        # Process doesn't exist, lock is stale
+                                        pass
+                            except ValueError:
+                                # Invalid PID format, treat as stale
+                                pass
+            except (IOError, OSError):
+                # Can't read lockfile, assume stale
+                pass
+            
+            # Lockfile exists but process is dead - remove stale lock
+            try:
+                LOCK_FILE.unlink()
+                logger.info("Removed stale lockfile")
+            except (OSError, PermissionError):
+                logger.warning("Could not remove stale lockfile, but continuing")
+        
+        # Create new lockfile with current PID and timestamp
+        try:
+            pid = os.getpid()
+            timestamp = str(int(time.time()))
+            lock_data = f"{pid}:{timestamp}"
+            
+            # Use exclusive file creation (fails if file exists)
+            # On Windows, we need to handle file locking differently
+            if platform.system() == "Windows":
+                # Windows: try to open with exclusive access
+                _lockfile_handle = None
+                try:
+                    _lockfile_handle = open(LOCK_FILE, 'x')
+                    _lockfile_handle.write(lock_data)
+                    _lockfile_handle.flush()
+                    logger.info(f"Instance lock acquired (PID: {pid})")
+                    return True
+                except FileExistsError:
+                    # Another instance created it between our check and creation
+                    logger.warning("Another instance started while acquiring lock")
+                    return False
+                except Exception:
+                    # Any other exception (write/flush failures, etc.) - close handle before propagating
+                    if _lockfile_handle:
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
+                        _lockfile_handle = None
+                    raise
+            else:
+                # Unix-like: use fcntl for proper file locking
+                _lockfile_handle = None
+                try:
+                    import fcntl
+                    _lockfile_handle = open(LOCK_FILE, 'w')
+                    fcntl.flock(_lockfile_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    _lockfile_handle.write(lock_data)
+                    _lockfile_handle.flush()
+                    logger.info(f"Instance lock acquired (PID: {pid})")
+                    return True
+                except (IOError, BlockingIOError):
+                    # Lock is held by another process
+                    if _lockfile_handle:
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
+                        _lockfile_handle = None
+                    logger.warning("Could not acquire lock - another instance may be running")
+                    return False
+                except Exception:
+                    # Any other exception (fcntl failures, write/flush failures, etc.) - close handle before propagating
+                    if _lockfile_handle:
+                        try:
+                            _lockfile_handle.close()
+                        except Exception:
+                            pass
+                        _lockfile_handle = None
+                    raise
+        except (IOError, OSError, PermissionError) as e:
+            logger.error(f"Failed to create lockfile: {e}")
+            # Don't block execution if we can't create lockfile
+            # This allows the app to run even if there are permission issues
+            return True
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in acquire_instance_lock: {e}")
+        # On error, allow execution to continue (fail open)
+        return True
+
+def release_instance_lock():
+    """Release the instance lockfile on application exit."""
+    global _lockfile_handle
+    
+    try:
+        if _lockfile_handle:
+            _lockfile_handle.close()
+            _lockfile_handle = None
+        
+        if LOCK_FILE.exists():
+            try:
+                LOCK_FILE.unlink()
+                logger.info("Instance lock released")
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Could not remove lockfile: {e}")
+    except Exception as e:
+        logger.warning(f"Error releasing lock: {e}")
+
+# Register cleanup handler for lockfile
+atexit.register(release_instance_lock)
+
 
 class SecurityError(Exception):
     """Custom exception for security-related failures."""
@@ -243,6 +402,96 @@ def mask_license_key(license_key: Optional[str]) -> str:
         return f"{sanitized[:LICENSE_MASK_PREFIX_LENGTH]}***{sanitized[-LICENSE_MASK_SUFFIX_LENGTH:]}"
 
     return f"{sanitized[:LICENSE_MASK_PREFIX_LENGTH]}***{sanitized[-LICENSE_MASK_SUFFIX_LENGTH:]}"
+
+
+def get_safe_initial_directory():
+    """
+    Get a safe initial directory for file dialogs.
+    Tries Desktop first, then Documents, then home directory.
+    Returns a path that exists and is accessible.
+    """
+    try:
+        home = Path.home()
+        
+        # Try Desktop first (most common user expectation)
+        desktop = home / "Desktop"
+        if desktop.exists() and desktop.is_dir():
+            return str(desktop)
+        
+        # Try Documents as fallback
+        documents = home / "Documents"
+        if documents.exists() and documents.is_dir():
+            return str(documents)
+        
+        # Fall back to home directory
+        if home.exists() and home.is_dir():
+            return str(home)
+        
+        # Last resort: current working directory
+        return os.getcwd()
+    except Exception as e:
+        logger.warning(f"Could not determine safe initial directory: {e}, using current directory")
+        return os.getcwd()
+
+
+def retry_network_request(request_func, max_retries=3, base_delay=1.0, max_delay=10.0):
+    """
+    Retry a network request with exponential backoff.
+    
+    Args:
+        request_func: Function that makes the network request (should return response or raise exception)
+        max_retries: Maximum number of retry attempts (default: 3)
+        base_delay: Initial delay in seconds (default: 1.0)
+        max_delay: Maximum delay in seconds (default: 10.0)
+    
+    Returns:
+        Response object if successful
+        
+    Raises:
+        The last exception if all retries fail
+    """
+    import time
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return request_func()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_exception = e
+            if attempt < max_retries:
+                # Exponential backoff: delay = base_delay * (2 ^ attempt), capped at max_delay
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.warning(f"Network request failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                logger.info(f"Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+            else:
+                logger.error(f"Network request failed after {max_retries + 1} attempts: {e}")
+        except requests.exceptions.RequestException as e:
+            # Don't retry on non-retryable errors (like 4xx client errors)
+            if isinstance(e, (requests.exceptions.HTTPError)) and hasattr(e.response, 'status_code'):
+                status = e.response.status_code
+                if 400 <= status < 500:
+                    # Client errors (4xx) shouldn't be retried
+                    logger.error(f"Client error (HTTP {status}): {e}")
+                    raise
+            # Retry other request exceptions
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(base_delay * (2 ** attempt), max_delay)
+                logger.warning(f"Request error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                logger.info(f"Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+            else:
+                logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+        except Exception as e:
+            # Don't retry on unexpected exceptions
+            logger.error(f"Unexpected error in network request: {e}")
+            raise
+    
+    # If we get here, all retries failed
+    if last_exception:
+        raise last_exception
+    raise Exception("Network request failed with unknown error")
 
 
 def is_within_offline_grace_period(last_validated):
@@ -531,7 +780,7 @@ def get_firebase_auth_token(require: bool = True) -> Optional[str]:
 
 
 def bind_license_to_computer(license_key, computer_id):
-    """Automatically binds license to computer in Firebase database"""
+    """Automatically binds license to computer in Firebase database with retry logic"""
     masked_license = mask_license_key(license_key)
     logger.info(f"Automatically binding license {masked_license} to computer {computer_id}")
     
@@ -540,10 +789,14 @@ def bind_license_to_computer(license_key, computer_id):
         url = f"{FIREBASE_URL}/license/{license_key}.json"
         auth_token = get_firebase_auth_token()
         params = {'auth': auth_token} if auth_token else None
-
-        # First get existing license data
-        response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        
+        # First get existing license data with retry
+        def get_license_data():
+            response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
+        
+        response = retry_network_request(get_license_data, max_retries=2, base_delay=1.0, max_delay=5.0)
         
         license_data = response.json()
         if not license_data:
@@ -557,22 +810,33 @@ def bind_license_to_computer(license_key, computer_id):
         license_data['binding_method'] = 'automatic'
         license_data['machine_info'] = machine_info
         
-        # Update the license in Firebase
-        response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        # Update the license in Firebase with retry
+        def update_license():
+            response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
+        
+        retry_network_request(update_license, max_retries=2, base_delay=1.0, max_delay=5.0)
         
         logger.info(f"Successfully bound license {masked_license} to computer {computer_id}")
         return True
         
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout binding license {masked_license} - server may be unreachable or slow")
+        return False
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection failed binding license {masked_license}: {e}")
+        logger.error("Possible causes: no internet, firewall blocking, or server down")
+        return False
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to bind license {masked_license}: {e}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error binding license {masked_license}: {e}")
+        logger.error(f"Unexpected error binding license {masked_license}: {e}", exc_info=True)
         return False
 
 def check_license_with_fingerprint(license_key):
-    """Enhanced license validation with comprehensive error handling and logging"""
+    """Enhanced license validation with comprehensive error handling, retry logic, and logging"""
     if not license_key or not license_key.strip():
         logger.error("Empty or invalid license key provided")
         return {"valid": False, "reason": "Invalid license key format"}
@@ -586,12 +850,16 @@ def check_license_with_fingerprint(license_key):
         url = f"{LICENSE_SERVER_URL}/validate"
         logger.debug(f"Checking license for key {masked_license}")
         
-        # Make request to Render server
-        response = requests.post(url, 
-                               headers={'Content-Type': 'application/json'},
-                               json={'license_key': license_key.strip(), 'machine_id': computer_id},
-                               timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()  # Raise exception for HTTP errors
+        # Make request to Render server with retry logic
+        def make_request():
+            response = requests.post(url, 
+                                   headers={'Content-Type': 'application/json'},
+                                   json={'license_key': license_key.strip(), 'machine_id': computer_id},
+                                   timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()  # Raise exception for HTTP errors
+            return response
+        
+        response = retry_network_request(make_request, max_retries=3, base_delay=1.0, max_delay=10.0)
         
         data = response.json()
         logger.debug(f"License validation response: {bool(data)}")
@@ -611,29 +879,45 @@ def check_license_with_fingerprint(license_key):
         
     except SecurityError as sec_err:
         logger.error(f"Security configuration error during license validation: {sec_err}")
-        return {"valid": False, "reason": str(sec_err)}
+        return {"valid": False, "reason": f"Configuration error: {str(sec_err)}"}
 
     except requests.exceptions.Timeout:
-        logger.error(f"License validation timeout after {NETWORK_REQUEST_TIMEOUT}s - server may be unreachable")
-        logger.error("Possible causes: slow network, firewall blocking, or server issues")
+        logger.error(f"License validation timeout after {NETWORK_REQUEST_TIMEOUT}s (with retries)")
+        logger.error("Possible causes: slow network connection, firewall blocking HTTPS, or server overload")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
     except requests.exceptions.SSLError as e:
         logger.error(f"SSL/TLS error during license validation: {e}")
-        logger.error("Possible causes: certificate issues, antivirus interfering, or proxy problems")
-        return {"valid": False, "reason": "SSL/security error - check network configuration"}
+        logger.error("Possible causes: outdated certificates, antivirus interfering, proxy configuration, or system date/time incorrect")
+        return {"valid": False, "reason": "SSL/security error - please check your network configuration and system date/time"}
     
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"License validation connection failed: {e}")
-        logger.error("Possible causes: no internet, firewall blocking, DNS issues, or server down")
+        logger.error(f"License validation connection failed after retries: {e}")
+        logger.error("Possible causes: no internet connection, firewall blocking HTTPS (port 443), DNS resolution failure, or license server is down")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code if hasattr(e, 'response') and e.response else "unknown"
+        logger.error(f"License validation HTTP error {status_code}: {e}")
+        if status_code == 503:
+            logger.error("Server is temporarily unavailable - please try again later")
+            return check_offline_grace_period()
+        elif status_code == 500:
+            logger.error("Server error occurred - please try again later or contact support")
+            return check_offline_grace_period()
+        else:
+            return {"valid": False, "reason": f"Server error (HTTP {status_code})"}
+    
     except requests.exceptions.RequestException as req_error:
-        logger.error(f"License validation request failed: {req_error}")
+        logger.error(f"License validation request failed after retries: {req_error}")
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
     
     except Exception as e:
-        logger.error(f"Unexpected error during license validation for {masked_license}: {e}")
+        logger.error(f"Unexpected error during license validation for {masked_license}: {e}", exc_info=True)
+        logger.info("Attempting to use offline grace period...")
         return check_offline_grace_period()
 
 
@@ -1546,19 +1830,19 @@ class VisualizationWindow:
                 sheet_data = None
             
             # Confusion Heatmap
-            self.create_confusion_heatmap_in_window()
+            self.create_confusion_heatmap_in_window(sheet_name=sheet_name)
             
             # Distribution Charts
-            self.create_distribution_charts_in_window()
+            self.create_distribution_charts_in_window(sheet_name=sheet_name)
             
             # Metrics Comparison
-            self.create_metrics_comparison_in_window()
+            self.create_metrics_comparison_in_window(sheet_name=sheet_name)
             
             # Radar Chart Analysis
-            self.create_radar_analysis_in_window()
+            self.create_radar_analysis_in_window(sheet_name=sheet_name)
             
             # Pie Chart Analysis
-            self.create_pie_chart_analysis_in_window()
+            self.create_pie_chart_analysis_in_window(sheet_name=sheet_name)
             
         except Exception as e:
             self.create_error_tab(f"Single-sheet visualization error: {str(e)}")
@@ -2667,7 +2951,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                        ha='center', va='center', fontsize=14, transform=ax.transAxes)
                 ax.set_title('Multi-Sheet Radar Analysis', fontsize=14, fontweight='bold')
             
-            fig.tight_layout()
+            # Add main figure title
+            fig.suptitle('Multi-Sheet Radar Analysis', fontsize=16, fontweight='bold', y=0.98)
+            
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
             
             canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
             canvas_fig.draw()
@@ -2870,7 +3157,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                        ha='center', va='center', fontsize=14, transform=ax.transAxes)
                 ax.set_title('Multi-Sheet Pie Chart Analysis', fontsize=14, fontweight='bold')
             
-            fig.tight_layout()
+            # Add main figure title
+            fig.suptitle('Multi-Sheet Pie Chart Analysis', fontsize=16, fontweight='bold', y=0.98)
+            
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
             
             canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
             canvas_fig.draw()
@@ -2905,10 +3195,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
     
 
     
-    def create_confusion_heatmap_in_window(self):
+    def create_confusion_heatmap_in_window(self, sheet_name=None):
         """Create confusion matrix heatmap for single sheet"""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Confusion Heatmap")
+        tab_title = f"Confusion Heatmap - {sheet_name}" if sheet_name else "Confusion Heatmap"
+        self.notebook.add(frame, text=tab_title)
         
         # Create scrollable canvas
         canvas = tk.Canvas(frame, bg='white')
@@ -2941,6 +3232,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                         display_matrix = self.analyzer.confusion_matrix
                         matrix_title = 'Confusion Matrix Heatmap (Normalization Failed)'
                         fmt_param = 'd'
+                
+                # Add sheet name context if available
+                if sheet_name:
+                    matrix_title = f"{matrix_title} - {sheet_name}"
                 
                 fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
                 ax = fig.add_subplot(111)
@@ -2990,10 +3285,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
         scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
     
-    def create_distribution_charts_in_window(self):
+    def create_distribution_charts_in_window(self, sheet_name=None):
         """Create distribution charts"""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Distributions")
+        tab_title = f"Distributions - {sheet_name}" if sheet_name else "Distributions"
+        self.notebook.add(frame, text=tab_title)
         
         # Create scrollable canvas
         canvas = tk.Canvas(frame, bg='white')
@@ -3028,7 +3324,9 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
                        color='lightcoral', edgecolor='darkred')
                 
-                ax.set_title('Actual vs Predicted Type Distribution', fontsize=14, fontweight='bold')
+                base_title = 'Actual vs Predicted Type Distribution'
+                title = f"{base_title} - {sheet_name}" if sheet_name else base_title
+                ax.set_title(title, fontsize=14, fontweight='bold')
                 ax.set_ylabel('Count')
                 ax.set_xlabel('Type')
                 ax.set_xticks(x)
@@ -3072,10 +3370,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
         scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
     
-    def create_metrics_comparison_in_window(self):
+    def create_metrics_comparison_in_window(self, sheet_name=None):
         """Create metrics comparison chart"""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Metrics Comparison")
+        tab_title = f"Metrics Comparison - {sheet_name}" if sheet_name else "Metrics Comparison"
+        self.notebook.add(frame, text=tab_title)
         
         # Create scrollable canvas
         canvas = tk.Canvas(frame, bg='white')
@@ -3109,7 +3408,9 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax.bar(x, recalls, width, label='Recall', color='lightgreen', edgecolor='darkgreen')
                 ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightcoral', edgecolor='darkred')
                 
-                ax.set_title('Performance Metrics by Class', fontsize=14, fontweight='bold')
+                base_title = 'Performance Metrics by Class'
+                title = f"{base_title} - {sheet_name}" if sheet_name else base_title
+                ax.set_title(title, fontsize=14, fontweight='bold')
                 ax.set_ylabel('Score')
                 ax.set_xlabel('Classes')
                 ax.set_xticks(x)
@@ -3154,10 +3455,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
         scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
     
-    def create_radar_analysis_in_window(self):
+    def create_radar_analysis_in_window(self, sheet_name=None):
         """Create comprehensive radar chart analysis for single sheet"""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Radar Analysis")
+        tab_title = f"Radar Analysis - {sheet_name}" if sheet_name else "Radar Analysis"
+        self.notebook.add(frame, text=tab_title)
         
         # Create scrollable canvas
         canvas = tk.Canvas(frame, bg='white')
@@ -3320,7 +3622,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                        ha='center', va='center', fontsize=14, transform=ax.transAxes)
                 ax.set_title('Radar Analysis', fontsize=14, fontweight='bold')
             
-            fig.tight_layout()
+            # Add main figure title with sheet name
+            if sheet_name:
+                fig.suptitle(f'Radar Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
+            
+            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1])
             
             canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
             canvas_fig.draw()
@@ -3353,10 +3659,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
         scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
     
-    def create_pie_chart_analysis_in_window(self):
+    def create_pie_chart_analysis_in_window(self, sheet_name=None):
         """Create comprehensive pie chart analysis for single sheet"""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="Pie Chart Analysis")
+        tab_title = f"Pie Chart Analysis - {sheet_name}" if sheet_name else "Pie Chart Analysis"
+        self.notebook.add(frame, text=tab_title)
         
         # Create scrollable canvas
         canvas = tk.Canvas(frame, bg='white')
@@ -3392,14 +3699,24 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                     pie_data = list(top_classes.values)
                     pie_labels = list(top_classes.index)
                 
-                colors = plt.cm.tab10(np.linspace(0, 1, len(pie_data)))
-                wedges, texts, autotexts = ax1.pie(pie_data, labels=pie_labels, autopct='%1.1f%%', 
-                                                   colors=colors, startangle=90)
+                # Use distinct, high-contrast colors
+                distinct_colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', 
+                                 '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#95a5a6']
+                colors = distinct_colors[:len(pie_data)]
+                
+                wedges, texts, autotexts = ax1.pie(pie_data, autopct='%1.1f%%', 
+                                                   colors=colors, startangle=90, 
+                                                   pctdistance=0.85, labeldistance=1.1)
                 
                 # Enhance text readability
                 for autotext in autotexts:
                     autotext.set_color('white')
                     autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                
+                # Add legend instead of cramped labels
+                ax1.legend(wedges, pie_labels, title="Classes", loc="center left", 
+                          bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9)
                 
                 ax1.set_title('Actual Class Distribution', fontsize=12, fontweight='bold')
                 
@@ -3418,13 +3735,19 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                     pie_data_pred = list(top_predicted.values)
                     pie_labels_pred = list(top_predicted.index)
                 
-                colors_pred = plt.cm.tab20(np.linspace(0, 1, len(pie_data_pred)))
-                wedges, texts, autotexts = ax2.pie(pie_data_pred, labels=pie_labels_pred, autopct='%1.1f%%', 
-                                                   colors=colors_pred, startangle=90)
+                colors_pred = distinct_colors[:len(pie_data_pred)]
+                wedges, texts, autotexts = ax2.pie(pie_data_pred, autopct='%1.1f%%', 
+                                                   colors=colors_pred, startangle=90,
+                                                   pctdistance=0.85, labeldistance=1.1)
                 
                 for autotext in autotexts:
                     autotext.set_color('white')
                     autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                
+                # Add legend instead of cramped labels
+                ax2.legend(wedges, pie_labels_pred, title="Classes", loc="center left",
+                          bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9)
                 
                 ax2.set_title('Predicted Class Distribution', fontsize=12, fontweight='bold')
                 
@@ -3488,7 +3811,9 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                         autotext.set_color('white')
                         autotext.set_fontweight('bold')
                     
-                    ax4.set_title('Data Quality Metrics', fontsize=12, fontweight='bold')
+                base_title = 'Data Quality Metrics'
+                title = f"{base_title} - {sheet_name}" if sheet_name else base_title
+                ax4.set_title(title, fontsize=12, fontweight='bold')
                 
             else:
                 # No data available
@@ -3497,7 +3822,11 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                        ha='center', va='center', fontsize=14, transform=ax.transAxes)
                 ax.set_title('Pie Chart Analysis', fontsize=14, fontweight='bold')
             
-            fig.tight_layout()
+            # Add main figure title with sheet name
+            if sheet_name:
+                fig.suptitle(f'Pie Chart Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
+            
+            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1])
             
             canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
             canvas_fig.draw()
@@ -4214,13 +4543,38 @@ class ProfessionalVisualizationDesigner:
 designer = ProfessionalVisualizationDesigner()
 
 class NumpyEncoder(json.JSONEncoder):
-    """Custom JSON encoder for numpy types"""
+    """Custom JSON encoder for numpy types and other non-serializable objects"""
     def default(self, obj):
-        if hasattr(obj, 'item'):
-            return obj.item()  # Convert numpy scalars to Python types
+        # Handle NumPy integer types
+        if isinstance(obj, np.integer):
+            return int(obj)
+        # Handle NumPy floating point types
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        # Handle NumPy arrays
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        # Handle NumPy booleans
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        # Handle regular Python booleans that might be wrapped
+        elif isinstance(obj, bool):
+            return bool(obj)
+        # Handle datetime objects
+        elif isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        # Fallback: duck-typing approach (original method)
+        elif hasattr(obj, 'item'):
+            return obj.item()
         elif hasattr(obj, 'tolist'):
-            return obj.tolist()  # Convert numpy arrays to lists
-        return super().default(obj)
+            return obj.tolist()
+        # Final fallback: convert to string and log
+        else:
+            try:
+                return super().default(obj)
+            except TypeError:
+                logging.warning(f"Unable to serialize object of type {type(obj)}, converting to string: {str(obj)[:100]}")
+                return str(obj)
 
 
 class SheetSelectionConfig:
@@ -4549,6 +4903,19 @@ class StatisticalAnalyzer:
                         True,
                     )
                     
+                    # Ensure export-related actions are enabled after successful analysis
+                    try:
+                        if hasattr(self, 'export_results_btn'):
+                            self.export_results_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_charts_btn'):
+                            self.export_charts_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_comparison_btn'):
+                            self.export_comparison_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'open_viz_btn'):
+                            self.open_viz_btn.config(state=tk.NORMAL)
+                    except Exception:
+                        pass
+                    
                     # Update QC Results Panel with new data
                     self.update_qc_results_panel()
                     
@@ -4696,34 +5063,6 @@ class StatisticalAnalyzer:
             self.handle_error(f"Failed to start batch processing: {str(e)}", e, "Thread submission")
             self.set_processing_state(False)
     
-    def _process_single_sheet(self, sheet_name):
-        """Process a single sheet with comprehensive error handling"""
-        try:
-            if not self.excel_file:
-                return None
-                
-            # Load sheet data
-            sheet_data = pd.read_excel(self.excel_file, sheet_name=sheet_name)
-            
-            if sheet_data.empty:
-                logger.warning(f"Sheet {sheet_name} is empty")
-                return None
-            
-            # Perform analysis (this would call your existing analysis methods)
-            # For now, return a placeholder result structure
-            results = {
-                'sheet_name': sheet_name,
-                'data_shape': sheet_data.shape,
-                'confusion_matrix': None,  # Would be populated by actual analysis
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            return results
-            
-        except Exception as e:
-            logger.error(f"Error processing sheet {sheet_name}: {e}")
-            return None
-    
     def export_results(self):
         """Export analysis results to various formats"""
         try:
@@ -4746,7 +5085,7 @@ class StatisticalAnalyzer:
                     ("Text files", "*.txt"),
                     ("All files", "*.*")
                 ],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -4778,10 +5117,12 @@ class StatisticalAnalyzer:
                     # Calculate data completeness (neuron utilization)
                     total_neurons = result.get('total_neurons', 0)
                     active_neurons = result.get('active_neurons', 0)
-                    if total_neurons > 0:
-                        data_completeness = (active_neurons / total_neurons) * 100
-                    else:
-                        data_completeness = 0
+                    data_completeness = result.get('data_completeness')
+                    if data_completeness is None:
+                        if total_neurons > 0:
+                            data_completeness = (active_neurons / total_neurons) * 100
+                        else:
+                            data_completeness = 0
                     
                     # Get statistical values
                     global_fit = result.get('global_fit', 0)
@@ -4789,10 +5130,13 @@ class StatisticalAnalyzer:
                     chi2_p_value = result.get('chi2_p_value', 1.0)
                     total_observations = result.get('total_observations', 0)
                     
-                    # Get chi2 from QC summary (it calculates it)
-                    chi2 = qc_summary.get('chi2', 0)
-                    if chi2 == 0 and 'chi2' not in qc_summary:
-                        # Fallback: calculate chi2 if not in QC summary
+                    # Get chi2_statistic from result or QC summary
+                    chi2 = result.get('chi2_statistic', 0)
+                    if chi2 == 0:
+                        # Try QC summary (uses chi2_statistic key)
+                        chi2 = qc_summary.get('chi2_statistic', 0)
+                    if chi2 == 0:
+                        # Fallback: calculate chi2 if not available
                         try:
                             from scipy.stats import chi2_contingency
                             matrix = result.get('confusion_matrix')
@@ -4878,7 +5222,7 @@ class StatisticalAnalyzer:
             # Get save directory
             save_dir = filedialog.askdirectory(
                 title="Select Directory to Save Charts",
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not save_dir:
@@ -4891,91 +5235,134 @@ class StatisticalAnalyzer:
                 try:
                     # Create subdirectory for this export
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    chart_dir = os.path.join(save_dir, f"StatisticalCharts_{timestamp}")
+                    chart_dir = os.path.join(save_dir, f"VizWindow_Charts_{timestamp}")
                     os.makedirs(chart_dir, exist_ok=True)
                     
                     exported_count = 0
-                    designer = ProfessionalVisualizationDesigner()
                     
-                    # Export charts for each successful analysis
-                    for sheet_name, result in self.batch_results.items():
-                        if result.get('status') != 'success':
-                            continue
-                            
-                        try:
-                            # Create sheet-specific directory
-                            safe_sheet_name = sheet_name.replace('/', '_').replace('\\', '_')
-                            sheet_dir = os.path.join(chart_dir, "Sheet_" + safe_sheet_name)
-                            os.makedirs(sheet_dir, exist_ok=True)
-                            
-                            # Export confusion matrix heatmap
-                            if 'confusion_matrix' in result:
-                                matrix = result['confusion_matrix']
-                                fig = designer.create_confusion_matrix_heatmap(matrix, sheet_name)
-                                if fig:  # Check if figure was created successfully
-                                    fig.savefig(os.path.join(sheet_dir, f"{safe_sheet_name}_confusion_matrix.png"), 
-                                              dpi=300, bbox_inches='tight')
-                                    plt.close(fig)
-                                    exported_count += 1
-                            
-                            # Export correlation matrix
-                            if 'correlation_matrix' in result:
-                                corr_matrix = result['correlation_matrix']
-                                fig = designer.create_correlation_matrix(corr_matrix, sheet_name)
-                                if fig:  # Check if figure was created successfully
-                                    fig.savefig(os.path.join(sheet_dir, f"{safe_sheet_name}_correlation_matrix.png"), 
-                                              dpi=300, bbox_inches='tight')
-                                    plt.close(fig)
-                                    exported_count += 1
-                            
-                            # Export statistical summary chart
-                            # Build stats dict from actual result data
-                            qc_summary = self.get_chi_square_qc_summary(result)
-                            stats_dict = {
-                                'chi2': qc_summary.get('chi2', 0),
-                                'p_value': qc_summary.get('p_value', result.get('chi2_p_value', 1.0)),
-                                'cramers_v': result.get('cramers_v', 0),
-                                'sample_size': result.get('total_observations', 0),
-                                'accuracy': result.get('global_fit', 0) / 100.0
-                            }
-                            if stats_dict.get('sample_size', 0) > 0:
-                                fig = designer.create_statistical_summary_chart(stats_dict, sheet_name)
-                                if fig:  # Check if figure was created successfully
-                                    fig.savefig(os.path.join(sheet_dir, f"{safe_sheet_name}_statistics.png"), 
-                                              dpi=300, bbox_inches='tight')
-                                    plt.close(fig)
-                                    exported_count += 1
-                                
-                        except Exception as e:
-                            logger.error(f"Error exporting charts for {sheet_name}: {e}")
-                            # Don't show messagebox here - it's in worker thread
-                            # Error will be logged and export will continue with other sheets
-                            continue
-                    
-                    # Create summary report
-                    summary_path = os.path.join(chart_dir, "export_summary.txt")
-                    with open(summary_path, 'w', encoding='utf-8') as f:
-                        f.write(f"Statistical Analysis Charts Export Summary\n")
-                        f.write(f"{'='*50}\n")
-                        f.write(f"Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                        f.write(f"Total Sheets Analyzed: {len(self.batch_results)}\n")
-                        f.write(f"Total Charts Exported: {exported_count}\n")
-                        f.write(f"Export Directory: {chart_dir}\n\n")
+                    # For single sheet - export viz window charts
+                    if len(self.batch_results) == 1:
+                        sheet_name = list(self.batch_results.keys())[0]
+                        result = self.batch_results[sheet_name]
                         
-                        f.write("Exported Charts by Sheet:\n")
-                        f.write("-" * 30 + "\n")
-                        for sheet_name, result in self.batch_results.items():
-                            status = "Success" if result.get('status') == 'success' else "Failed"
-                            f.write(f"{sheet_name}: {status}\n")
+                        if result.get('status') != 'success':
+                            raise ValueError(f"Sheet {sheet_name} analysis was not successful")
+                        
+                        safe_sheet_name = sheet_name.replace('/', '_').replace('\\', '_').replace(':', '_')
+                        
+                        # Set up analyzer state for chart generation
+                        self.confusion_matrix = result.get('confusion_matrix')
+                        if self.confusion_matrix is not None:
+                            # Export Confusion Heatmap
+                            try:
+                                fig_heat = self._export_confusion_heatmap(sheet_name, result)
+                                if fig_heat:
+                                    fig_heat.savefig(os.path.join(chart_dir, f"{safe_sheet_name}_confusion_heatmap.png"), 
+                                                    dpi=300, bbox_inches='tight')
+                                    plt.close(fig_heat)
+                                    exported_count += 1
+                            except Exception as e:
+                                logger.error(f"Error exporting confusion heatmap: {e}")
+                            
+                            # Export Distributions
+                            try:
+                                fig_dist = self._export_distributions(sheet_name, result)
+                                if fig_dist:
+                                    fig_dist.savefig(os.path.join(chart_dir, f"{safe_sheet_name}_distributions.png"), 
+                                                    dpi=300, bbox_inches='tight')
+                                    plt.close(fig_dist)
+                                    exported_count += 1
+                            except Exception as e:
+                                logger.error(f"Error exporting distributions: {e}")
+                            
+                            # Export Metrics Comparison
+                            try:
+                                fig_metrics = self._export_metrics_comparison(sheet_name, result)
+                                if fig_metrics:
+                                    fig_metrics.savefig(os.path.join(chart_dir, f"{safe_sheet_name}_metrics_comparison.png"), 
+                                                       dpi=300, bbox_inches='tight')
+                                    plt.close(fig_metrics)
+                                    exported_count += 1
+                            except Exception as e:
+                                logger.error(f"Error exporting metrics comparison: {e}")
+                            
+                            # Export Radar Analysis
+                            try:
+                                fig_radar = self._export_radar_analysis(sheet_name, result)
+                                if fig_radar:
+                                    fig_radar.savefig(os.path.join(chart_dir, f"{safe_sheet_name}_radar_analysis.png"), 
+                                                     dpi=300, bbox_inches='tight')
+                                    plt.close(fig_radar)
+                                    exported_count += 1
+                            except Exception as e:
+                                logger.error(f"Error exporting radar analysis: {e}")
+                            
+                            # Export Pie Chart Analysis
+                            try:
+                                fig_pie = self._export_pie_chart_analysis(sheet_name, result)
+                                if fig_pie:
+                                    fig_pie.savefig(os.path.join(chart_dir, f"{safe_sheet_name}_pie_chart_analysis.png"), 
+                                                   dpi=300, bbox_inches='tight')
+                                    plt.close(fig_pie)
+                                    exported_count += 1
+                            except Exception as e:
+                                logger.error(f"Error exporting pie chart analysis: {e}")
+                    
+                    else:
+                        # Multi-sheet export - export comparison charts
+                        # Ensure comparison_summary exists
+                        if not hasattr(self, 'comparison_summary') or self.comparison_summary is None:
+                            self.create_comparison_summary()
+                        
+                        # Export Performance Matrix Heatmap
+                        try:
+                            fig_perf = self._export_performance_matrix_heatmap()
+                            if fig_perf:
+                                fig_perf.savefig(os.path.join(chart_dir, "multi_sheet_performance_matrix.png"), 
+                                                dpi=300, bbox_inches='tight')
+                                plt.close(fig_perf)
+                                exported_count += 1
+                        except Exception as e:
+                            logger.error(f"Error exporting performance matrix: {e}")
+                        
+                        # Export Multi-Sheet Radar Chart
+                        try:
+                            fig_radar = self._export_multi_sheet_radar()
+                            if fig_radar:
+                                fig_radar.savefig(os.path.join(chart_dir, "multi_sheet_radar_analysis.png"), 
+                                                 dpi=300, bbox_inches='tight')
+                                plt.close(fig_radar)
+                                exported_count += 1
+                        except Exception as e:
+                            logger.error(f"Error exporting multi-sheet radar chart: {e}")
+                        
+                        # Export Multi-Sheet Pie Chart
+                        try:
+                            fig_pie = self._export_multi_sheet_pie()
+                            if fig_pie:
+                                fig_pie.savefig(os.path.join(chart_dir, "multi_sheet_pie_analysis.png"), 
+                                               dpi=300, bbox_inches='tight')
+                                plt.close(fig_pie)
+                                exported_count += 1
+                        except Exception as e:
+                            logger.error(f"Error exporting multi-sheet pie chart: {e}")
                     
                     def show_success():
                         self.stop_activity_animation()
                         self.update_activity_indicator("Charts exported!")
-                        messagebox.showinfo("Export Complete", 
-                                          f"Charts exported successfully!\n\n"
-                                          f"Location: {chart_dir}\n"
-                                          f"Charts exported: {exported_count}\n"
-                                          f"Sheets processed: {len([r for r in self.batch_results.values() if r.get('status') == 'success'])}")
+                        
+                        success_msg = (f"Visualization window charts exported successfully!\n\n"
+                                      f"Location: {chart_dir}\n"
+                                      f"Charts exported: {exported_count}")
+                        
+                        if len(self.batch_results) > 1:
+                            success_msg += ("\n\n" + "─" * 50 + "\n\n"
+                                          "💡 To export individual sheet visualizations:\n"
+                                          "   1. Click 'Open Viz Window'\n"
+                                          "   2. Select a specific sheet from the 'Individual Sheets' dropdown\n"
+                                          "   3. Click 'Export Charts' again to export that sheet's detailed visualizations")
+                        
+                        messagebox.showinfo("Export Complete", success_msg)
                     
                     self.root.after(0, show_success)
                     
@@ -4993,6 +5380,562 @@ class StatisticalAnalyzer:
             self.stop_activity_animation()
             self.update_activity_indicator("Export failed")
             messagebox.showerror("Export Error", f"Failed to start chart export:\n{str(e)}")
+    
+    def _export_confusion_heatmap(self, sheet_name, result):
+        """Create confusion heatmap figure for export"""
+        confusion_matrix = result.get('confusion_matrix')
+        if confusion_matrix is None:
+            return None
+        
+        fig = Figure(figsize=(10, 8), dpi=100, facecolor='white')
+        ax = fig.add_subplot(111)
+        
+        # Create heatmap
+        normalize = self.normalize_confusion_matrices.get() if hasattr(self, 'normalize_confusion_matrices') else False
+        if normalize:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                cm_normalized = confusion_matrix.div(confusion_matrix.sum(axis=1), axis=0)
+                cm_normalized = cm_normalized.fillna(0)
+            sns.heatmap(cm_normalized, annot=True, fmt='.2f', cmap='Blues', ax=ax,
+                       cbar_kws={'label': 'Normalized Frequency'})
+        else:
+            sns.heatmap(confusion_matrix, annot=True, fmt='d', cmap='Blues', ax=ax,
+                       cbar_kws={'label': 'Count'})
+        
+        ax.set_title(f'Confusion Matrix - {sheet_name}', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Predicted')
+        ax.set_xlabel('Actual')
+        fig.tight_layout()
+        return fig
+    
+    def _export_distributions(self, sheet_name, result):
+        """Create distributions chart for export"""
+        confusion_matrix = result.get('confusion_matrix')
+        if confusion_matrix is None:
+            return None
+        
+        fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
+        ax = fig.add_subplot(1, 1, 1)
+        
+        actual_counts = confusion_matrix.sum(axis=0)
+        predicted_counts = confusion_matrix.sum(axis=1)
+        
+        x = np.arange(len(actual_counts))
+        width = 0.35
+        
+        ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
+               color='skyblue', edgecolor='navy')
+        ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
+               color='lightcoral', edgecolor='darkred')
+        
+        ax.set_title(f'Actual vs Predicted Type Distribution - {sheet_name}', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Count')
+        ax.set_xlabel('Type')
+        ax.set_xticks(x)
+        ax.set_xticklabels(actual_counts.index, rotation=45, ha='right')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        return fig
+    
+    def _export_metrics_comparison(self, sheet_name, result):
+        """Create metrics comparison chart for export"""
+        class_metrics = result.get('class_metrics')
+        if not class_metrics:
+            return None
+        
+        fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
+        ax = fig.add_subplot(111)
+        
+        classes = list(class_metrics.keys())
+        precisions = [class_metrics[c]['precision'] for c in classes]
+        recalls = [class_metrics[c]['recall'] for c in classes]
+        f1_scores = [class_metrics[c]['f1_score'] for c in classes]
+        
+        x = np.arange(len(classes))
+        width = 0.25
+        
+        ax.bar(x - width, precisions, width, label='Precision', color='skyblue', edgecolor='navy')
+        ax.bar(x, recalls, width, label='Recall', color='lightgreen', edgecolor='darkgreen')
+        ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightcoral', edgecolor='darkred')
+        
+        ax.set_ylabel('Score')
+        ax.set_xlabel('Class')
+        ax.set_title(f'Per-Class Performance Metrics - {sheet_name}', fontsize=14, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(classes, rotation=45, ha='right')
+        ax.legend()
+        ax.set_ylim(0, 1.0)
+        ax.grid(True, alpha=0.3, axis='y')
+        fig.tight_layout()
+        return fig
+    
+    def _export_radar_analysis(self, sheet_name, result):
+        """Create radar analysis chart for export"""
+        class_metrics = result.get('class_metrics')
+        confusion_matrix = result.get('confusion_matrix')
+        if not class_metrics or confusion_matrix is None:
+            return None
+        
+        from math import pi
+        fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+        
+        classes = list(class_metrics.keys())
+        
+        # Performance metrics radar
+        ax1 = fig.add_subplot(2, 2, 1, projection='polar')
+        metrics = ['Precision', 'Recall', 'F1-Score']
+        angles = [n / float(len(metrics)) * 2 * pi for n in range(len(metrics))]
+        angles += angles[:1]
+        
+        colors = plt.cm.tab10(np.linspace(0, 1, len(classes)))
+        for i, (class_name, color) in enumerate(zip(classes, colors)):
+            class_data = class_metrics[class_name]
+            values = [class_data['precision'], class_data['recall'], class_data['f1_score']]
+            values += values[:1]
+            ax1.plot(angles, values, 'o-', linewidth=2, label=str(class_name), color=color)
+            ax1.fill(angles, values, alpha=0.15, color=color)
+        
+        ax1.set_xticks(angles[:-1])
+        ax1.set_xticklabels(metrics)
+        ax1.set_ylim(0, 1)
+        ax1.set_title('Per-Class Performance Metrics', fontsize=12, fontweight='bold', pad=20)
+        ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+        ax1.grid(True)
+        
+        fig.suptitle(f'Radar Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
+        fig.tight_layout()
+        return fig
+    
+    def _export_pie_chart_analysis(self, sheet_name, result):
+        """Create pie chart analysis for export"""
+        confusion_matrix = result.get('confusion_matrix')
+        class_metrics = result.get('class_metrics')
+        if confusion_matrix is None:
+            return None
+        
+        fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+        
+        # Actual distribution
+        ax1 = fig.add_subplot(2, 2, 1)
+        actual_counts = confusion_matrix.sum(axis=0)
+        top_classes = actual_counts.nlargest(8)
+        other_count = actual_counts.sum() - top_classes.sum()
+        
+        if other_count > 0:
+            pie_data = list(top_classes.values) + [other_count]
+            pie_labels = list(top_classes.index) + ['Others']
+        else:
+            pie_data = list(top_classes.values)
+            pie_labels = list(top_classes.index)
+        
+        distinct_colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', 
+                         '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#95a5a6']
+        colors = distinct_colors[:len(pie_data)]
+        
+        wedges, texts, autotexts = ax1.pie(pie_data, autopct='%1.1f%%', 
+                                           colors=colors, startangle=90, 
+                                           pctdistance=0.85, labeldistance=1.1)
+        
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontweight('bold')
+            autotext.set_fontsize(10)
+        
+        ax1.legend(wedges, pie_labels, title="Classes", loc="center left", 
+                  bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9)
+        ax1.set_title('Actual Class Distribution', fontsize=12, fontweight='bold')
+        
+        # Predicted distribution
+        ax2 = fig.add_subplot(2, 2, 2)
+        predicted_counts = confusion_matrix.sum(axis=1)
+        top_predicted = predicted_counts.nlargest(8)
+        other_predicted = predicted_counts.sum() - top_predicted.sum()
+        
+        if other_predicted > 0:
+            pie_data_pred = list(top_predicted.values) + [other_predicted]
+            pie_labels_pred = list(top_predicted.index) + ['Others']
+        else:
+            pie_data_pred = list(top_predicted.values)
+            pie_labels_pred = list(top_predicted.index)
+        
+        colors_pred = distinct_colors[:len(pie_data_pred)]
+        wedges, texts, autotexts = ax2.pie(pie_data_pred, autopct='%1.1f%%', 
+                                           colors=colors_pred, startangle=90,
+                                           pctdistance=0.85, labeldistance=1.1)
+        
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontweight('bold')
+            autotext.set_fontsize(10)
+        
+        ax2.legend(wedges, pie_labels_pred, title="Classes", loc="center left",
+                  bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9)
+        ax2.set_title('Predicted Class Distribution', fontsize=12, fontweight='bold')
+        
+        fig.suptitle(f'Pie Chart Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
+        fig.tight_layout()
+        return fig
+    
+    def _export_performance_matrix_heatmap(self):
+        """Create performance matrix heatmap figure for multi-sheet export"""
+        try:
+            # Ensure comparison_summary exists
+            if not hasattr(self, 'comparison_summary') or self.comparison_summary is None:
+                self.create_comparison_summary()
+            
+            if self.comparison_summary is None or self.comparison_summary.empty:
+                return None
+            
+            # Prepare data for heatmap
+            df = self.comparison_summary.copy()
+            
+            # Handle any NaN values
+            df = df.fillna(0)
+            
+            # Select key metrics for visualization - performance metrics first, then reference metrics
+            performance_metrics = ['Global_Fit', 'Cramers_V', 'Utilization', 'Active_Neurons']
+            performance_labels = ['Classification Accuracy (%)', 'Association Strength (Cramer\'s V)', 'Neuron Utilization (%)', 'Active Neurons']
+            
+            # Reference metrics (will be shown at bottom)
+            reference_metrics = ['Total_Samples']
+            reference_labels = ['Total Samples']
+            
+            # Combine for plotting
+            metrics_to_plot = performance_metrics + reference_metrics
+            metric_labels = performance_labels + reference_labels
+            
+            # Verify all required columns exist
+            missing_columns = [col for col in metrics_to_plot if col not in df.columns]
+            if missing_columns:
+                logger.warning(f"Missing required columns for performance matrix: {missing_columns}")
+                return None
+            
+            # Prepare data matrix
+            plot_data = df[metrics_to_plot].copy()
+            
+            # Check for empty or invalid data
+            if plot_data.empty or plot_data.isnull().all().all():
+                logger.warning("No valid data available for performance matrix visualization")
+                return None
+            
+            # Normalize data for better visualization (0-1 scale)
+            normalized_data = plot_data.copy()
+            
+            # Normalize each metric appropriately with safety checks
+            # Classification Accuracy: higher is better, normalize to 0-1
+            if plot_data['Global_Fit'].max() != plot_data['Global_Fit'].min():
+                normalized_data['Global_Fit'] = (plot_data['Global_Fit'] - plot_data['Global_Fit'].min()) / (plot_data['Global_Fit'].max() - plot_data['Global_Fit'].min())
+            else:
+                normalized_data['Global_Fit'] = 0.5
+            
+            # Cramer's V: higher is better, normalize to 0-1
+            if plot_data['Cramers_V'].max() != plot_data['Cramers_V'].min():
+                normalized_data['Cramers_V'] = (plot_data['Cramers_V'] - plot_data['Cramers_V'].min()) / (plot_data['Cramers_V'].max() - plot_data['Cramers_V'].min())
+            else:
+                normalized_data['Cramers_V'] = 0.5
+            
+            # Neuron Utilization: higher is better, normalize to 0-1
+            if plot_data['Utilization'].max() != plot_data['Utilization'].min():
+                normalized_data['Utilization'] = (plot_data['Utilization'] - plot_data['Utilization'].min()) / (plot_data['Utilization'].max() - plot_data['Utilization'].min())
+            else:
+                normalized_data['Utilization'] = 0.5
+            
+            # Total Samples: reference metric, set to neutral (0.5) since it's not a performance indicator
+            normalized_data['Total_Samples'] = 0.5
+            
+            # Active Neurons: lower is better (more efficient), invert normalization
+            if plot_data['Active_Neurons'].max() != plot_data['Active_Neurons'].min():
+                active_neurons_normalized = (plot_data['Active_Neurons'] - plot_data['Active_Neurons'].min()) / (plot_data['Active_Neurons'].max() - plot_data['Active_Neurons'].min())
+                normalized_data['Active_Neurons'] = 1 - active_neurons_normalized
+            else:
+                normalized_data['Active_Neurons'] = 0.5
+            
+            # Final validation of normalized data
+            if normalized_data.isnull().any().any() or (normalized_data < 0).any().any() or (normalized_data > 1).any().any():
+                normalized_data = normalized_data.fillna(0.5)
+                normalized_data = normalized_data.clip(0, 1)
+            
+            # Create the heatmap
+            fig = Figure(figsize=(14, 10), dpi=100, facecolor='white')
+            ax = fig.add_subplot(111)
+            
+            # Create heatmap using seaborn
+            import seaborn as sns
+            
+            # Set up the heatmap with proper formatting
+            sns.heatmap(
+                normalized_data.T,  # Transpose to show metrics as rows, configs as columns
+                annot=plot_data.T,  # Show actual values
+                fmt='.1f',
+                cmap='RdYlGn',
+                ax=ax,
+                cbar_kws={
+                    'label': 'Normalized Performance\n(0=Worst, 1=Best)',
+                    'shrink': 0.8,
+                    'aspect': 20
+                },
+                linewidths=0.5,
+                linecolor='white',
+                square=False,
+                xticklabels=df['SOM_Config'].tolist(),
+                yticklabels=metric_labels,
+                annot_kws={'size': 9}
+            )
+            
+            # Customize the heatmap appearance
+            ax.set_title('Performance Matrix - Performance Metrics\n(Color: Normalized Performance)', 
+                        fontsize=14, fontweight='bold', pad=20)
+            ax.set_xlabel('SOM Configuration', fontsize=12, fontweight='bold', labelpad=10)
+            ax.set_ylabel('Performance Metrics', fontsize=12, fontweight='bold', labelpad=10)
+            
+            # Rotate x-axis labels for better readability
+            try:
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+            except Exception:
+                pass
+            
+            # Adjust layout
+            fig.tight_layout()
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Error creating performance matrix heatmap for export: {e}")
+            return None
+    
+    def _export_multi_sheet_radar(self):
+        """Create multi-sheet radar chart figure for export"""
+        try:
+            # Ensure comparison_summary exists
+            if not hasattr(self, 'comparison_summary') or self.comparison_summary is None:
+                self.create_comparison_summary()
+            
+            if self.comparison_summary is None or self.comparison_summary.empty:
+                return None
+            
+            from math import pi
+            
+            # Create figure with subplots for different radar analyses
+            fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+            
+            sheets = self.comparison_summary['SOM_Config']
+            accuracies = self.comparison_summary['Global_Fit'] / 100  # Normalize to 0-1
+            cramers_v = self.comparison_summary['Cramers_V']
+            utilization = self.comparison_summary['Utilization'] / 100  # Normalize to 0-1
+            
+            # Create radar for top 6 sheets
+            top_sheets = sheets.head(6)
+            top_accuracies = accuracies.head(6)
+            top_cramers = cramers_v.head(6)
+            top_utilization = utilization.head(6)
+            
+            angles = [n / float(len(top_sheets)) * 2 * pi for n in range(len(top_sheets))]
+            angles += angles[:1]
+            
+            # Performance comparison radar
+            ax1 = fig.add_subplot(2, 2, 1, projection='polar')
+            acc_values = list(top_accuracies.values) + [top_accuracies.iloc[0]]
+            ax1.plot(angles, acc_values, 'o-', linewidth=2, label='Classification Accuracy', color='blue')
+            ax1.fill(angles, acc_values, alpha=0.15, color='blue')
+            ax1.set_xticks(angles[:-1])
+            ax1.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
+            ax1.set_ylim(0, 1)
+            ax1.set_title('Sheet Classification Accuracy Comparison', fontsize=12, fontweight='bold', pad=20)
+            ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            ax1.grid(True)
+            
+            # Association strength radar
+            ax2 = fig.add_subplot(2, 2, 2, projection='polar')
+            cramers_values = list(top_cramers.values) + [top_cramers.iloc[0]]
+            ax2.plot(angles, cramers_values, 'o-', linewidth=2, label='Association Strength (Cramer\'s V)', color='red')
+            ax2.fill(angles, cramers_values, alpha=0.15, color='red')
+            ax2.set_xticks(angles[:-1])
+            ax2.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
+            ax2.set_ylim(0, 1)
+            ax2.set_title('Association Strength (Cramer\'s V) Comparison', fontsize=12, fontweight='bold', pad=20)
+            ax2.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            ax2.grid(True)
+            
+            # Utilization radar
+            ax3 = fig.add_subplot(2, 2, 3, projection='polar')
+            util_values = list(top_utilization.values) + [top_utilization.iloc[0]]
+            ax3.plot(angles, util_values, 'o-', linewidth=2, label='Neuron Utilization', color='green')
+            ax3.fill(angles, util_values, alpha=0.15, color='green')
+            ax3.set_xticks(angles[:-1])
+            ax3.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
+            ax3.set_ylim(0, 1)
+            ax3.set_title('Neuron Utilization Comparison', fontsize=12, fontweight='bold', pad=20)
+            ax3.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            ax3.grid(True)
+            
+            # Overall performance radar
+            ax4 = fig.add_subplot(2, 2, 4, projection='polar')
+            # Calculate composite score for each sheet
+            composite_scores = []
+            for i in range(len(top_sheets)):
+                score = (top_accuracies.iloc[i] * 0.4 + 
+                        top_cramers.iloc[i] * 0.3 + 
+                        top_utilization.iloc[i] * 0.3)
+                composite_scores.append(score)
+            
+            composite_scores += [composite_scores[0]]
+            ax4.plot(angles, composite_scores, 'o-', linewidth=2, label='Composite Score', color='purple')
+            ax4.fill(angles, composite_scores, alpha=0.15, color='purple')
+            ax4.set_xticks(angles[:-1])
+            ax4.set_xticklabels([str(name) for name in top_sheets], fontsize=7, rotation=0, ha='center')
+            ax4.set_ylim(0, 1)
+            ax4.set_title('Overall Performance Score', fontsize=12, fontweight='bold', pad=20)
+            ax4.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            ax4.grid(True)
+            
+            # Add main figure title
+            fig.suptitle('Multi-Sheet Radar Analysis', fontsize=16, fontweight='bold', y=0.98)
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Error creating multi-sheet radar chart for export: {e}")
+            return None
+    
+    def _export_multi_sheet_pie(self):
+        """Create multi-sheet pie chart analysis figure for export"""
+        try:
+            # Ensure comparison_summary exists
+            if not hasattr(self, 'comparison_summary') or self.comparison_summary is None:
+                self.create_comparison_summary()
+            
+            if self.comparison_summary is None or self.comparison_summary.empty:
+                return None
+            
+            # Create figure with subplots for different pie analyses
+            fig = Figure(figsize=(16, 10), dpi=100, facecolor='white')
+            
+            # Performance distribution pie chart
+            ax1 = fig.add_subplot(2, 2, 1)
+            accuracies = self.comparison_summary['Global_Fit']
+            
+            # Categorize performance levels
+            excellent = len(accuracies[accuracies >= 80])
+            good = len(accuracies[(accuracies >= 60) & (accuracies < 80)])
+            fair = len(accuracies[(accuracies >= 40) & (accuracies < 60)])
+            poor = len(accuracies[accuracies < 40])
+            
+            performance_data = [excellent, good, fair, poor]
+            performance_labels = ['Excellent (≥80%)', 'Good (60-79%)', 'Fair (40-59%)', 'Poor (<40%)']
+            performance_colors = ['#2E7D32', '#388E3C', '#F57C00', '#D32F2F']
+            
+            # Filter out zero values for cleaner visualization
+            filtered_data = [(data, label, color) for data, label, color in zip(performance_data, performance_labels, performance_colors) if data > 0]
+            if filtered_data:
+                data_values, data_labels, data_colors = zip(*filtered_data)
+                wedges, texts, autotexts = ax1.pie(data_values, autopct='%1.1f%%', 
+                                                   colors=data_colors, startangle=90,
+                                                   pctdistance=0.85)
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                ax1.legend(wedges, data_labels, loc="center left", bbox_to_anchor=(-0.1, 0.5), 
+                          fontsize=9, title="Performance Levels", title_fontsize=10)
+            
+            ax1.set_title('Performance Distribution Across Sheets', fontsize=12, fontweight='bold')
+            
+            # Association strength distribution pie chart
+            ax2 = fig.add_subplot(2, 2, 2)
+            cramers_v = self.comparison_summary['Cramers_V']
+            
+            # Categorize association strength
+            strong = len(cramers_v[cramers_v >= 0.7])
+            moderate = len(cramers_v[(cramers_v >= 0.5) & (cramers_v < 0.7)])
+            weak = len(cramers_v[(cramers_v >= 0.3) & (cramers_v < 0.5)])
+            negligible = len(cramers_v[cramers_v < 0.3])
+            
+            association_data = [strong, moderate, weak, negligible]
+            association_labels = ['Strong (≥0.7)', 'Moderate (0.5-0.7)', 'Weak (0.3-0.5)', 'Negligible (<0.3)']
+            association_colors = ['#1976D2', '#42A5F5', '#90CAF9', '#E3F2FD']
+            
+            # Filter out zero values for cleaner visualization
+            filtered_data = [(data, label, color) for data, label, color in zip(association_data, association_labels, association_colors) if data > 0]
+            if filtered_data:
+                data_values, data_labels, data_colors = zip(*filtered_data)
+                wedges, texts, autotexts = ax2.pie(data_values, autopct='%1.1f%%', 
+                                                   colors=data_colors, startangle=90,
+                                                   pctdistance=0.85)
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                ax2.legend(wedges, data_labels, loc="center left", bbox_to_anchor=(-0.1, 0.5), 
+                          fontsize=9, title="Association Strength", title_fontsize=10)
+            
+            ax2.set_title('Association Strength Distribution', fontsize=12, fontweight='bold')
+            
+            # Neuron utilization distribution pie chart
+            ax3 = fig.add_subplot(2, 2, 3)
+            utilization = self.comparison_summary['Utilization']
+            
+            # Categorize utilization levels
+            high_util = len(utilization[utilization >= 80])
+            medium_util = len(utilization[(utilization >= 50) & (utilization < 80)])
+            low_util = len(utilization[utilization < 50])
+            
+            utilization_data = [high_util, medium_util, low_util]
+            utilization_labels = ['High (≥80%)', 'Medium (50-79%)', 'Low (<50%)']
+            utilization_colors = ['#4CAF50', '#8BC34A', '#CDDC39']
+            
+            # Filter out zero values for cleaner visualization
+            filtered_data = [(data, label, color) for data, label, color in zip(utilization_data, utilization_labels, utilization_colors) if data > 0]
+            if filtered_data:
+                data_values, data_labels, data_colors = zip(*filtered_data)
+                wedges, texts, autotexts = ax3.pie(data_values, autopct='%1.1f%%', 
+                                                   colors=data_colors, startangle=90,
+                                                   pctdistance=0.85)
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                ax3.legend(wedges, data_labels, loc="center left", bbox_to_anchor=(-0.1, 0.5), 
+                          fontsize=9, title="Utilization Levels", title_fontsize=10)
+            
+            ax3.set_title('Neuron Utilization Distribution', fontsize=12, fontweight='bold')
+            
+            # Sample size distribution pie chart
+            ax4 = fig.add_subplot(2, 2, 4)
+            sample_sizes = self.comparison_summary['Total_Samples']
+            
+            # Categorize sample sizes
+            large = len(sample_sizes[sample_sizes >= 1000])
+            medium = len(sample_sizes[(sample_sizes >= 100) & (sample_sizes < 1000)])
+            small = len(sample_sizes[sample_sizes < 100])
+            
+            sample_data = [large, medium, small]
+            sample_labels = ['Large (≥1000)', 'Medium (100-999)', 'Small (<100)']
+            sample_colors = ['#FF9800', '#FFB74D', '#FFCC02']
+            
+            # Filter out zero values for cleaner visualization
+            filtered_data = [(data, label, color) for data, label, color in zip(sample_data, sample_labels, sample_colors) if data > 0]
+            if filtered_data:
+                data_values, data_labels, data_colors = zip(*filtered_data)
+                wedges, texts, autotexts = ax4.pie(data_values, autopct='%1.1f%%', 
+                                                   colors=data_colors, startangle=90,
+                                                   pctdistance=0.85)
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                    autotext.set_fontsize(10)
+                ax4.legend(wedges, data_labels, loc="center left", bbox_to_anchor=(-0.1, 0.5), 
+                          fontsize=9, title="Sample Sizes", title_fontsize=10)
+            
+            ax4.set_title('Sample Size Distribution', fontsize=12, fontweight='bold')
+            
+            # Add main figure title
+            fig.suptitle('Multi-Sheet Pie Chart Analysis', fontsize=16, fontweight='bold', y=0.98)
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Error creating multi-sheet pie chart for export: {e}")
+            return None
     
     def export_comparison(self):
         """Export comparison analysis between multiple sheets"""
@@ -5017,7 +5960,7 @@ class StatisticalAnalyzer:
                     ("Text files", "*.txt"),
                     ("All files", "*.*")
                 ],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -5218,7 +6161,7 @@ class StatisticalAnalyzer:
                     ("JSON files", "*.json"),
                     ("All files", "*.*")
                 ],
-                initialdir="C:/Users/Desktop"
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -5256,7 +6199,9 @@ class StatisticalAnalyzer:
                 # Calculate data completeness (neuron utilization)
                 total_neurons = result.get('total_neurons', 0)
                 active_neurons = result.get('active_neurons', 0)
-                data_completeness = (active_neurons / total_neurons * 100) if total_neurons > 0 else 0
+                data_completeness = result.get('data_completeness')
+                if data_completeness is None:
+                    data_completeness = (active_neurons / total_neurons * 100) if total_neurons > 0 else 0
                 
                 # Get QC summary for statistics
                 qc_summary = self.get_chi_square_qc_summary(result)
@@ -5270,8 +6215,26 @@ class StatisticalAnalyzer:
                     'data_completeness': data_completeness,
                     'warnings': result.get('warnings', []),
                     'error': result.get('error'),
-                    'timestamp': result.get('timestamp', datetime.now().isoformat())
+                    'timestamp': result.get('timestamp', datetime.now().isoformat()),
+                    # Add critical fields for full functionality
+                    'total_neurons': total_neurons,
+                    'active_neurons': active_neurons,
+                    'global_fit': result.get('global_fit', 0),
+                    'total_observations': result.get('total_observations', 0)
                 }
+                
+                # Save class metrics if available
+                if 'class_metrics' in result:
+                    try:
+                        serializable_result['class_metrics'] = result['class_metrics']
+                    except Exception:
+                        pass
+                
+                # Save labels if available
+                if 'category_labels' in result:
+                    serializable_result['category_labels'] = list(result['category_labels']) if hasattr(result['category_labels'], '__iter__') else result['category_labels']
+                if 'row_labels' in result:
+                    serializable_result['row_labels'] = list(result['row_labels']) if hasattr(result['row_labels'], '__iter__') else result['row_labels']
                 
                 # Include statistics from QC summary and direct result values
                 serializable_result['statistics'] = {
@@ -5309,14 +6272,25 @@ class StatisticalAnalyzer:
             # Save the file
             file_ext = filename.lower().split('.')[-1]
             
+            # Try to serialize first to catch any errors before writing to file
+            try:
+                test_json = json.dumps(project_data, cls=NumpyEncoder)
+                # If we got here, serialization works
+            except Exception as test_error:
+                self.update_activity_indicator("Save failed")
+                error_msg = f"Cannot convert data to JSON format:\n{str(test_error)}\n\nPlease report this error."
+                messagebox.showerror("Serialization Error", error_msg)
+                logging.error(f"JSON serialization test failed: {test_error}", exc_info=True)
+                return
+            
             if file_ext == 'json':
-                # Save as JSON
+                # Save as JSON with NumPy encoder
                 with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
+                    json.dump(project_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             else:
-                # Save as deltaV solutions project file (JSON format)
+                # Save as TraceSeis project file (JSON format) with NumPy encoder
                 with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(project_data, f, indent=2, ensure_ascii=False)
+                    json.dump(project_data, f, indent=2, ensure_ascii=False, cls=NumpyEncoder)
             
             # Update current project reference
             self.current_project = filename
@@ -5329,9 +6303,16 @@ class StatisticalAnalyzer:
                               f"Sheets saved: {len(self.batch_results)}\n"
                               f"Successful analyses: {project_data['metadata']['successful_analyses']}")
             
+        except TypeError as e:
+            # Specific handler for JSON serialization errors
+            self.update_activity_indicator("Save failed")
+            error_msg = f"Data serialization error:\n{str(e)}\n\nThis may be due to incompatible data types in the analysis results."
+            messagebox.showerror("Save Error", error_msg)
+            logging.error(f"JSON serialization error during save: {e}", exc_info=True)
         except Exception as e:
             self.update_activity_indicator("Save failed")
             messagebox.showerror("Save Error", f"Failed to save project:\n{str(e)}")
+            logging.error(f"Project save error: {e}", exc_info=True)
     
     def load_project(self):
         """Load a saved project file"""
@@ -5347,7 +6328,7 @@ class StatisticalAnalyzer:
                     ("JSON files", "*.json"),
                     ("All files", "*.*")
                 ],
-                initialdir="C:/Users/Desktop"
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -5409,11 +6390,35 @@ class StatisticalAnalyzer:
                         result['cramers_v'] = stats.get('cramers_v', 0)
                         result['total_observations'] = stats.get('sample_size', 0)
                     
+                    # Restore critical fields for full functionality
+                    result['total_neurons'] = result_data.get('total_neurons', 0)
+                    result['active_neurons'] = result_data.get('active_neurons', 0)
+                    result['global_fit'] = result_data.get('global_fit', 0)
+                    result['data_completeness'] = result_data.get('data_completeness', 0)
+                    
+                    # Restore total_observations if not already set
+                    if 'total_observations' not in result:
+                        result['total_observations'] = result_data.get('total_observations', 0)
+                    
+                    # Restore class_metrics if available
+                    if 'class_metrics' in result_data:
+                        result['class_metrics'] = result_data['class_metrics']
+                    
+                    # Restore labels if available
+                    if 'category_labels' in result_data:
+                        result['category_labels'] = result_data['category_labels']
+                    if 'row_labels' in result_data:
+                        result['row_labels'] = result_data['row_labels']
+                    
                     # Reconstruct confusion matrix
                     if 'confusion_matrix' in result_data:
                         matrix_data = result_data['confusion_matrix']
                         if matrix_data:
-                            result['confusion_matrix'] = np.array(matrix_data)
+                            try:
+                                result['confusion_matrix'] = np.array(matrix_data)
+                            except Exception as matrix_error:
+                                logger.warning(f"Could not convert confusion matrix to numpy array for '{sheet_name}': {matrix_error}")
+                                result['confusion_matrix'] = None
                     
                     # Store QC summary if available
                     if 'qc_summary' in result_data:
@@ -7416,7 +8421,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         filename = filedialog.askopenfilename(
             title="Select Excel File (Contingency Table or Confusion Matrix)",
             filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")],
-            initialdir="C:/Users",
+            initialdir=get_safe_initial_directory(),
             defaultextension=".xlsx"
         )
         
@@ -8305,6 +9310,19 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                         True,
                     )
 
+                    # Ensure export-related actions are enabled after successful analysis
+                    try:
+                        if hasattr(self, 'export_results_btn'):
+                            self.export_results_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_charts_btn'):
+                            self.export_charts_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_comparison_btn'):
+                            self.export_comparison_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'open_viz_btn'):
+                            self.open_viz_btn.config(state=tk.NORMAL)
+                    except Exception:
+                        pass
+
                     # Update window title and mode
                     self.root.title(
                         f"Statistical Analysis Tool - Batch Comparison ({len(self.batch_results)} sheets)"
@@ -8417,6 +9435,19 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                         100,
                         True,
                     )
+                    
+                    # Ensure export-related actions are enabled after successful analysis
+                    try:
+                        if hasattr(self, 'export_results_btn'):
+                            self.export_results_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_charts_btn'):
+                            self.export_charts_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'export_comparison_btn'):
+                            self.export_comparison_btn.config(state=tk.NORMAL)
+                        if hasattr(self, 'open_viz_btn'):
+                            self.open_viz_btn.config(state=tk.NORMAL)
+                    except Exception:
+                        pass
                     
                     # For single sheet, populate results for visualization
                     if len(self.batch_results) == 1:
@@ -8567,6 +9598,8 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 global_fit = (diagonal_sum / total_observations) * 100
             
             # Cramer's V
+            chi2 = 0
+            p_value = 1
             try:
                 chi2, p_value, dof, expected = chi2_contingency(matrix)
                 n = total_observations
@@ -8578,13 +9611,17 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                     cramers_v = 0
             except:
                 cramers_v = 0
+                chi2 = 0
                 p_value = 1
             
             # Percent Zero Entries (inactive units)
             total_neurons = len(analysis_matrix)
             active_neurons = len([w for w in unit_assignments.values() if w is not None])
             inactive_neurons = total_neurons - active_neurons
-            percent_undefined = (inactive_neurons / total_neurons) * 100
+            percent_undefined = (inactive_neurons / total_neurons) * 100 if total_neurons > 0 else 0
+            
+            # Data completeness (utilization) as percentage
+            data_completeness = (active_neurons / total_neurons) * 100 if total_neurons > 0 else 0
             
             # Calculate per-class metrics (precision, recall, f1-score)
             class_metrics = {}
@@ -8623,11 +9660,13 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 'input_format': selected_format,  # Store format for terminology selection
                 'is_confusion_matrix': is_already_confusion_matrix,  # For display logic
                 'total_observations': total_observations,
-                'total_neurons': total_neurons,
+'total_neurons': total_neurons,
                 'active_neurons': active_neurons,
                 'global_fit': global_fit,
                 'cramers_v': cramers_v,
                 'percent_undefined': percent_undefined,
+                'data_completeness': data_completeness,
+                'chi2_statistic': chi2,
                 'chi2_p_value': p_value,
                 'matrix_shape': confusion_matrix.shape,
                 'confusion_matrix': confusion_matrix,
@@ -8656,6 +9695,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
                 'Active_Neurons': results['active_neurons'],
                 'Total_Neurons': results['total_neurons'],
                 'Utilization': (results['active_neurons'] / results['total_neurons']) * 100,
+                'Chi2_Statistic': results.get('chi2_statistic', 0),
                 'P_Value': results['chi2_p_value']
             })
         
@@ -8669,7 +9709,7 @@ TraceSeis, Inc.® is a registered trademark of TraceSeis, Inc."""
         # Reorder columns for better display
         column_order = ['Rank', 'SOM_Config', 'Global_Fit', 'Cramers_V', 
                        'Percent_Zero_Entries', 'Total_Samples', 'Active_Neurons', 
-                       'Total_Neurons', 'Utilization', 'P_Value']
+                       'Total_Neurons', 'Utilization', 'Chi2_Statistic', 'P_Value']
         self.comparison_summary = self.comparison_summary[column_order]
     
     def update_single_sheet_results_display(self, sheet_name):
@@ -8709,6 +9749,7 @@ Inactive {unit_term}: {sheet_results['total_neurons'] - sheet_results['active_ne
 PERFORMANCE METRICS:
 Global Fit (Classification Accuracy): {sheet_results['global_fit']:.2f}%
 Association Strength (Cramer's V): {sheet_results['cramers_v']:.4f}
+Chi-Square Statistic: {sheet_results.get('chi2_statistic', 0):.2f}
 Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
 {utilization_term}: {(sheet_results['active_neurons'] / sheet_results['total_neurons'] * 100):.1f}%
 
@@ -8755,6 +9796,7 @@ Association Strength: {association_grade}
 • {utilization_desc}
 
 Statistical Significance:
+• Chi-Square Statistic: {sheet_results.get('chi2_statistic', 0):.2f}
 • Chi-Square P-Value: {sheet_results['chi2_p_value']:.6f}
 • {'Statistically significant' if sheet_results['chi2_p_value'] < 0.05 else 'Not statistically significant'} at α=0.05
 """
@@ -9541,7 +10583,7 @@ QUALITY DISTRIBUTION:
                 title="Export QC Report",
                 defaultextension=".txt",
                 filetypes=[("Text files", "*.txt"), ("CSV files", "*.csv"), ("All files", "*.*")],
-                initialdir=os.path.expanduser("~/Desktop")
+                initialdir=get_safe_initial_directory()
             )
             
             if not filename:
@@ -10693,6 +11735,30 @@ def main():
         print(f"\nStarting {APP_NAME} v{APP_VERSION}...")
         print(f"Log file: {LOG_FILE}\n")
         
+        # Check for single instance - prevent multiple instances from running
+        logger.info("Checking for existing instance...")
+        if not acquire_instance_lock():
+            error_msg = (
+                f"Another instance of {APP_NAME} is already running.\n\n"
+                "Only one instance can run at a time to ensure proper license management.\n"
+                "Please close the existing instance before starting a new one."
+            )
+            print(f"\n❌ ERROR: {error_msg}\n")
+            logger.error("Application startup blocked - another instance detected")
+            if platform.system() == "Windows":
+                # Show Windows message box
+                try:
+                    import ctypes
+                    ctypes.windll.user32.MessageBoxW(
+                        0,
+                        error_msg,
+                        f"{APP_NAME} - Instance Already Running",
+                        0x10 | 0x0  # MB_ICONERROR | MB_OK
+                    )
+                except Exception:
+                    pass
+            sys.exit(1)
+        
         # Initialize commercial protection
         # PyInstaller sets sys.frozen, Nuitka sets __compiled__
         is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
@@ -10859,6 +11925,9 @@ def main():
                             logger.info("Commercial protection cleaned up")
                         except Exception as e:
                             logger.warning(f"Protection cleanup warning: {e}")
+                    
+                    # Release instance lockfile
+                    release_instance_lock()
                     
                     # Perform comprehensive cleanup
                     app.cleanup()

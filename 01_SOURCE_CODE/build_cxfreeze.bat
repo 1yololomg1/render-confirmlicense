@@ -100,42 +100,63 @@ echo.
 
 REM Cleanup previous build
 echo [4/6] Cleaning previous build artifacts...
+
+REM Kill any processes that might be locking files
+echo   Ensuring no processes are using build files...
+timeout /t 1 /nobreak >nul
+
+REM Aggressively delete build directory
 if exist build (
     echo   Removing previous build directory...
+    REM Try multiple times with delays
     rmdir /s /q build >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    rmdir /s /q build >nul 2>&1
+    timeout /t 1 /nobreak >nul
+    rmdir /s /q build >nul 2>&1
+    
     if exist build (
-        echo   WARNING: Build directory is locked. Attempting rename...
-        set RENAME_INDEX=1
-        :rename_loop
-        if exist build_old_!RENAME_INDEX! (
-            set /a RENAME_INDEX+=1
-            goto rename_loop
-        )
-        ren build build_old_!RENAME_INDEX! >nul 2>&1
-        if errorlevel 1 (
+        echo   WARNING: Build directory is locked. Attempting force deletion...
+        REM Try to close any handles
+        taskkill /F /FI "WINDOWTITLE eq *build*" >nul 2>&1
+        timeout /t 2 /nobreak >nul
+        rmdir /s /q build >nul 2>&1
+        
+        if exist build (
             echo.
-            echo [ERROR] Cannot clean or rename build directory!
+            echo [ERROR] Cannot delete build directory!
             echo.
             echo Please ensure:
             echo   1. All programs using build folder are closed
             echo   2. File Explorer is not viewing the build folder
             echo   3. Antivirus is not scanning the folder
+            echo   4. No CONFIRM.exe is running from build folder
+            echo.
+            echo You may need to manually delete the build folder and try again.
             echo.
             pause
             exit /b 1
         )
-        echo   Previous build saved as: build_old_!RENAME_INDEX!
-    ) else (
-        echo   Build directory cleaned - OK
     )
+    echo   Build directory deleted - OK
 ) else (
     echo   No previous build found - OK
 )
 
+REM Clean up dist directory
 if exist dist (
     echo   Removing dist directory...
     rmdir /s /q dist >nul 2>&1
     echo   Dist directory cleaned - OK
+)
+
+REM Clean up any old build directories
+if exist build_old_* (
+    echo   Removing old build backup directories...
+    for /d %%d in (build_old_*) do (
+        rmdir /s /q "%%d" >nul 2>&1
+    )
+    echo   Old build directories cleaned - OK
 )
 
 echo   Cleanup complete

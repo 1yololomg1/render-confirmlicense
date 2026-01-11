@@ -1,5 +1,5 @@
 ---
-description: Specification for analyzing security and protection mechanisms including hardware fingerprinting and anti-tampering systems
+description: Documentation for software protection mechanisms including anti-debugging, fingerprinting, and runtime integrity verification
 ---
 
 # === USER INSTRUCTIONS ===
@@ -236,43 +236,40 @@ $END$
 # protection-algorithms
 
 ## Core Protection Mechanisms (01_SOURCE_CODE/protection_module.py)
-
-Hardware Fingerprinting:
-- Machine binding validation through hardware identifiers
-- Duplicate machine detection and tracking
-- Machine ID format validation with tripartite structure
-
-Anti-Debugging Systems:
-- Active process scanning for debugger detection
-- API hooking prevention mechanisms
-- Memory patch detection and blocking
-- Virtual machine environment detection (warning level)
-- Sandbox environment detection (critical level)
-
-Runtime Integrity:
-- Continuous execution path validation (30-second intervals)
-- Whitelist-based execution validation
-- File size boundary enforcement (1MB - 500MB)
-- Path restriction validation
-- License data integrity verification
-
-Importance Score: 90/100
-
-## Protection Response Logic
-
-Violation Categories:
-- Critical violations trigger immediate termination
-- Warning violations generate logs without termination
-- Virtual machine detection handled as warnings
-- Sandbox detection treated as critical violations
-
-Protection Monitoring:
-- Continuous runtime checks every 30 seconds
-- Machine binding verification
-- License expiration validation
-- Revocation status checking
+- Hardware fingerprinting for unique machine identification
+- Runtime integrity verification to detect tampering attempts
+- Anti-debugging systems with customized violation handling
+- Virtual machine and sandbox detection capabilities
+- Build environment detection for protection state management
 
 Importance Score: 85/100
+
+## Runtime Integrity Components
+- Machine binding verification with duplicate detection
+- Multi-factor validation combining key, machine ID, and expiry
+- Custom anti-tampering logic with severity-based responses
+- Protection state management for development/production environments
+- Real-time integrity monitoring for license validation
+
+Importance Score: 80/100
+
+## Machine Binding Architecture
+- Hardware-level fingerprinting for unique system identification
+- Duplicate usage detection with real-time monitoring
+- Binding verification through multi-point validation
+- Tamper protection mechanisms for binding data
+- Machine-specific validation logic with environment awareness
+
+Importance Score: 75/100
+
+## Security Violation Handling
+- Tiered response system based on violation severity
+- Customized handling of tampering attempts
+- Real-time violation detection and reporting
+- Environment-aware protection responses
+- Automatic validation state management
+
+Importance Score: 70/100
 
 $END$
 

@@ -7,6 +7,11 @@ echo ========================================
 echo CONFIRM.exe Build Script
 echo ========================================
 echo.
+echo Cleaning previous builds...
+if exist build rmdir /s /q build >nul 2>&1
+if exist dist rmdir /s /q dist >nul 2>&1
+echo Cleanup complete.
+echo.
 echo Building CONFIRM.exe with cx_Freeze...
 echo This window will stay open.
 echo.

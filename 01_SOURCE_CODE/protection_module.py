@@ -300,39 +300,69 @@ class CommercialProtection:
         if "_MEI" in path:
             return True
         
-        valid_paths = [
-            r"C:\Program Files",
-            r"C:\Program Files (x86)",
-            os.path.expanduser(r"~\AppData\Local"),
-            os.path.expanduser(r"~\AppData\Local\Programs"),
-            os.path.expanduser(r"~\AppData\Roaming"),
-            os.path.expanduser(r"~\Desktop"),
-            os.path.expanduser(r"~\Downloads"),
-            os.path.expanduser(r"~\Documents"),
-            os.path.expanduser(r"~\OneDrive"),
-            "CONFIRM_Distribution_Optimized",
-            "OneDrive",
-        ]
-        
         path_normalized = path.replace("\\", "/").lower()
-        for valid_path in valid_paths:
-            valid_normalized = str(valid_path).replace("\\", "/").lower()
-            if valid_normalized in path_normalized or path_normalized.startswith(valid_normalized):
-                return True
         
-        is_compiled = getattr(sys, 'frozen', False) or '__compiled__' in dir()
-        if is_compiled:
+        # Always allow the directory containing the executable
+        try:
+            exe_dir = os.path.dirname(sys.executable).replace("\\", "/").lower()
+            if exe_dir and exe_dir in path_normalized:
+                return True
+        except Exception:
+            pass
+        
+        # Get current working directory
+        try:
             current_dir = os.getcwd().replace("\\", "/").lower()
-            if current_dir in path_normalized:
+            if current_dir and current_dir in path_normalized:
+                return True
+        except Exception:
+            pass
+        
+        # Build valid paths dynamically (not hardcoded to C: drive)
+        valid_path_patterns = []
+        
+        # Standard Windows program directories (any drive)
+        path_drive = os.path.splitdrive(path)[0].lower() if os.path.splitdrive(path)[0] else ""
+        if path_drive:
+            # Program Files on any drive
+            valid_path_patterns.append(f"{path_drive}/program files")
+            valid_path_patterns.append(f"{path_drive}/program files (x86)")
+        
+        # User directories (works on any system)
+        try:
+            home = os.path.expanduser("~")
+            if home:
+                home_normalized = home.replace("\\", "/").lower()
+                valid_path_patterns.extend([
+                    f"{home_normalized}/appdata/local",
+                    f"{home_normalized}/appdata/local/programs",
+                    f"{home_normalized}/appdata/roaming",
+                    f"{home_normalized}/desktop",
+                    f"{home_normalized}/downloads",
+                    f"{home_normalized}/documents",
+                    f"{home_normalized}/onedrive",
+                ])
+        except Exception:
+            pass
+        
+        # Check against valid patterns
+        for valid_pattern in valid_path_patterns:
+            if valid_pattern in path_normalized or path_normalized.startswith(valid_pattern):
                 return True
         
-            path_drive = os.path.splitdrive(path)[0].lower()
-            if path_drive:
-                valid_drives = ['c:', 'd:', 'e:', 'f:', 'g:', 'h:', 'i:', 'j:', 'k:', 'l:', 'm:', 'n:', 'o:', 'p:', 'q:', 'r:', 's:', 't:', 'u:', 'v:', 'w:', 'x:', 'y:', 'z:']
-                if path_drive in valid_drives:
-                    suspicious_segments = ['temp', 'tmp', 'windows/system32', 'windows/syswow64']
-                    if not any(sus in path_normalized for sus in suspicious_segments):
-                        return True
+        # Allow any drive letter (A-Z) as long as it's not in suspicious system locations
+        if path_drive:
+            # Check if it's a valid drive letter (a-z)
+            if len(path_drive) == 2 and path_drive[0].isalpha() and path_drive[1] == ':':
+                suspicious_segments = [
+                    'temp', 'tmp', 
+                    'windows/system32', 'windows/syswow64',
+                    'windows/temp', 'windows/tmp',
+                    'programdata/temp'
+                ]
+                # Allow if path doesn't contain suspicious segments
+                if not any(sus in path_normalized for sus in suspicious_segments):
+                    return True
         
         return False
     
@@ -351,6 +381,48 @@ class CommercialProtection:
                 file_size = stat.st_size
                 file_size_mb = file_size / (1024 * 1024)
                 self._log_info(f"File exists: True, Size: {file_size_mb:.2f} MB ({file_size} bytes)")
+                
+                # Check if this is a cx_Freeze build (small loader EXE with lib/ folder)
+                # Multiple detection methods for maximum reliability
+                is_frozen = getattr(sys, 'frozen', False)
+                exe_dir = os.path.dirname(exe_path)
+                lib_dir = os.path.join(exe_dir, 'lib')
+                
+                # Method 1: Standard cx_Freeze detection
+                is_cxfreeze = is_frozen and os.path.exists(lib_dir)
+                
+                # Method 2: Check for library.zip (cx_Freeze specific)
+                library_zip = os.path.join(lib_dir, 'library.zip')
+                has_library_zip = os.path.exists(library_zip)
+                
+                # Method 3: Small exe size with lib folder present (typical cx_Freeze)
+                is_small_with_lib = file_size < 1024 * 1024 and os.path.exists(lib_dir)
+                
+                # Method 4: Check for cx_Freeze directory pattern (exe.win-amd64-X.XX)
+                exe_dir_name = os.path.basename(exe_dir).lower()
+                has_cxfreeze_dir_pattern = 'exe.win' in exe_dir_name or 'exe-win' in exe_dir_name
+                
+                # Method 5: Check for Python DLL alongside exe (cx_Freeze copies pythonXX.dll)
+                python_dll_patterns = ['python3.dll', 'python311.dll', 'python310.dll', 'python39.dll']
+                has_python_dll = any(os.path.exists(os.path.join(exe_dir, dll)) for dll in python_dll_patterns)
+                
+                # Method 6: Small exe + Python DLL = definitely cx_Freeze
+                is_cxfreeze_by_dll = file_size < 1024 * 1024 and has_python_dll
+                
+                # Method 7: Check for base_library.zip (another cx_Freeze artifact)
+                base_library_zip = os.path.join(exe_dir, 'base_library.zip')
+                has_base_library = os.path.exists(base_library_zip)
+                
+                self._log_info(f"cx_Freeze detection: frozen={is_frozen}, lib_exists={os.path.exists(lib_dir)}, "
+                              f"library_zip={has_library_zip}, small_with_lib={is_small_with_lib}, "
+                              f"cxfreeze_dir_pattern={has_cxfreeze_dir_pattern}, python_dll={has_python_dll}, "
+                              f"base_library={has_base_library}")
+                
+                # If ANY of these methods detect cx_Freeze, skip the size check
+                if (is_cxfreeze or has_library_zip or is_small_with_lib or 
+                    has_cxfreeze_dir_pattern or is_cxfreeze_by_dll or has_base_library):
+                    self._log_info("Detected cx_Freeze build - skipping size check (code is in lib/ folder or DLLs)")
+                    return True
                 
                 min_size = 1024 * 1024  # 1 MB
                 max_size = 500 * 1024 * 1024  # 500 MB
