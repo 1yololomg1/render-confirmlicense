@@ -6,26 +6,30 @@ Error 254 occurs because Render is missing the required Firebase environment var
 ## SOLUTION: Set These Exact Environment Variables in Render Dashboard
 
 ### Required Firebase Service Account Variables:
+⚠️ **CRITICAL SECURITY WARNING**: NEVER store actual credentials in documentation!
+
+Set these securely in Render dashboard (never commit to git):
+
 ```
 type=service_account
-project_id=confirm-license-manager
-private_key_id=<PRIVATE_KEY_ID_PLACEHOLDER>
-private_key="-----BEGIN PRIVATE KEY-----
-<REDACTED_PRIVATE_KEY>
------END PRIVATE KEY-----\n"
-client_email=firebase-adminsdk-fbsvc@confirm-license-manager.iam.gserviceaccount.com
-client_id=<CLIENT_ID_PLACEHOLDER>
+project_id=your-project-id
+private_key_id=your-private-key-id
+private_key="[Paste your full private key here - format: BEGIN PRIVATE KEY...END PRIVATE KEY]"
+client_email=your-service-account@your-project.iam.gserviceaccount.com
+client_id=your-client-id
 auth_uri=https://accounts.google.com/o/oauth2/auth
 token_uri=https://oauth2.googleapis.com/token
 auth_provider_x509_cert_url=https://www.googleapis.com/oauth2/v1/certs
-client_x509_cert_url=https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confirm-license-manager.iam.gserviceaccount.com
+client_x509_cert_url=https://www.googleapis.com/robot/v1/metadata/x509/your-service-account%40your-project.iam.gserviceaccount.com
 universe_domain=googleapis.com
 ```
 
 ### Required Application Secrets:
+⚠️ **CRITICAL SECURITY WARNING**: Generate new secrets immediately!
+
 ```
-SHARED_SECRET=<SET_IN_RENDER_DASHBOARD>
-LICENSE_SECRET=<SET_IN_RENDER_DASHBOARD>
+SHARED_SECRET=generate-new-32-character-secret-now
+LICENSE_SECRET=generate-new-32-character-secret-now
 ```
 
 ### Optional Services (can be left empty):

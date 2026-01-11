@@ -17,11 +17,9 @@ services:
       - key: project_id
         value: confirm-license-manager
       - key: private_key_id
-        value: <PRIVATE_KEY_ID_PLACEHOLDER>
+        value: your-private-key-id
       - key: private_key
-        value: "-----BEGIN PRIVATE KEY-----
-<REDACTED_PRIVATE_KEY>
------END PRIVATE KEY-----\n"
+        value: "[Paste your full private key here - format: BEGIN PRIVATE KEY...END PRIVATE KEY]"
       - key: client_email
         value: firebase-adminsdk-fbsvc@confirm-license-manager.iam.gserviceaccount.com
       - key: client_id

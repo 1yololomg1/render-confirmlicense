@@ -39,7 +39,10 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backend_bases import NavigationToolbar2
+import matplotlib
+matplotlib.use('TkAgg')
 from matplotlib.figure import Figure
 import seaborn as sns
 from scipy.stats import chi2_contingency, pearsonr
@@ -121,8 +124,8 @@ LOG_FILE = CONFIG_DIR / "confirm.log"
 LOCK_FILE = CONFIG_DIR / "confirm.lock"
 
 # Timeout and Performance Constants
-NETWORK_REQUEST_TIMEOUT = int(os.getenv("CONFIRM_NETWORK_TIMEOUT", "15"))
-OFFLINE_GRACE_PERIOD_HOURS = int(os.getenv("CONFIRM_OFFLINE_GRACE_HOURS", "72"))
+NETWORK_REQUEST_TIMEOUT = int(os.getenv("CONFIRM_NETWORK_TIMEOUT", "25"))
+OFFLINE_GRACE_PERIOD_HOURS = int(os.getenv("CONFIRM_OFFLINE_GRACE_HOURS", "168"))
 LICENSE_MASK_PREFIX_LENGTH = 4
 LICENSE_MASK_SUFFIX_LENGTH = 4
 MAX_WORKERS = int(os.getenv("CONFIRM_MAX_WORKERS", "2"))
@@ -688,33 +691,94 @@ def save_config(config):
 app_config = load_or_create_config()
 
 def get_computer_fingerprint():
-    """Create unique computer ID for license binding with comprehensive error handling"""
+    """Create unique computer ID for license binding with enhanced stability"""
     try:
         logger.debug("Generating computer fingerprint...")
         
-        # Primary method: MAC address + system info
-        mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
-                               for elements in range(0,2*6,2)][::-1])
-        processor = platform.processor() or "unknown"
+        # Collect multiple stable hardware identifiers
+        identifiers = []
         
-        computer_data = f"{mac_address}_{processor}"
-        fingerprint = hashlib.md5(computer_data.encode()).hexdigest()[:12]
+        # 1. Get first MAC address (more stable than uuid.getnode())
+        try:
+            import psutil
+            net_addrs = psutil.net_if_addrs()
+            for interface_name, interface_addresses in net_addrs.items():
+                for addr in interface_addresses:
+                    if addr.family.name == 'AF_LINK' and not addr.address.startswith('00:00:00'):
+                        identifiers.append(f"mac_{addr.address.replace(':', '')}")
+                        break
+                if identifiers:
+                    break
+        except Exception as e:
+            logger.debug(f"MAC address collection failed: {e}")
         
-        logger.debug(f"Generated fingerprint: {fingerprint}")
+        # 2. Motherboard serial (Windows only, very stable)
+        if platform.system() == "Windows":
+            try:
+                import subprocess
+                result = subprocess.run(['wmic', 'baseboard', 'get', 'serialnumber'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    serial = result.stdout.split('\n')[1].strip()
+                    if serial and serial != 'To be filled by O.E.M.':
+                        identifiers.append(f"mb_{serial}")
+            except Exception as e:
+                logger.debug(f"Motherboard serial collection failed: {e}")
+        
+        # 3. CPU ID (stable across reboots)
+        try:
+            import subprocess
+            if platform.system() == "Windows":
+                result = subprocess.run(['wmic', 'cpu', 'get', 'processorid'], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    cpu_id = result.stdout.split('\n')[1].strip()
+                    if cpu_id:
+                        identifiers.append(f"cpu_{cpu_id}")
+            else:
+                # Fallback for non-Windows
+                identifiers.append(f"proc_{platform.processor()}")
+        except Exception as e:
+            logger.debug(f"CPU ID collection failed: {e}")
+        
+        # 4. Disk serial (very stable)
+        try:
+            import psutil
+            disk_partitions = psutil.disk_partitions()
+            if disk_partitions:
+                # Use system drive (usually C:)
+                system_drive = disk_partitions[0].device
+                disk_usage = psutil.disk_usage(system_drive)
+                identifiers.append(f"disk_{hash(str(disk_usage.total))}")
+        except Exception as e:
+            logger.debug(f"Disk serial collection failed: {e}")
+        
+        # 5. Fallback to original method if we don't have enough identifiers
+        if len(identifiers) < 2:
+            logger.warning("Insufficient stable identifiers, using fallback method")
+            mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
+                                   for elements in range(0,2*6,2)][::-1])
+            processor = platform.processor() or "unknown"
+            identifiers.extend([f"oldmac_{mac_address}", f"proc_{processor}"])
+        
+        # Create fingerprint from combined identifiers
+        combined_data = "_".join(sorted(identifiers))
+        fingerprint = hashlib.sha256(combined_data.encode()).hexdigest()[:16]
+        
+        logger.debug(f"Generated fingerprint with {len(identifiers)} identifiers: {fingerprint}")
         return fingerprint
         
     except Exception as e:
-        logger.warning(f"Primary fingerprint method failed: {e}, using fallback")
+        logger.warning(f"Enhanced fingerprint method failed: {e}, using emergency fallback")
         
-        # Fallback method: hostname-based
+        # Emergency fallback - use multiple system properties
         try:
-            fallback_data = platform.node() or "unknown_host"
-            fingerprint = hashlib.md5(fallback_data.encode()).hexdigest()[:12]
-            logger.debug(f"Fallback fingerprint: {fingerprint}")
+            emergency_data = f"{platform.node()}_{platform.machine()}_{platform.system()}"
+            fingerprint = hashlib.md5(emergency_data.encode()).hexdigest()[:12]
+            logger.debug(f"Emergency fingerprint: {fingerprint}")
             return fingerprint
         except Exception as fallback_error:
             logger.error(f"All fingerprint methods failed: {fallback_error}")
-            # Ultimate fallback
             return "emergency_id"
 
 
@@ -780,43 +844,31 @@ def get_firebase_auth_token(require: bool = True) -> Optional[str]:
 
 
 def bind_license_to_computer(license_key, computer_id):
-    """Automatically binds license to computer in Firebase database with retry logic"""
+    """Automatically binds license to computer using Render server with retry logic"""
     masked_license = mask_license_key(license_key)
     logger.info(f"Automatically binding license {masked_license} to computer {computer_id}")
     
     try:
-        # Update Firebase with computer binding
-        url = f"{FIREBASE_URL}/license/{license_key}.json"
-        auth_token = get_firebase_auth_token()
-        params = {'auth': auth_token} if auth_token else None
+        # Use Render server for license binding
+        url = f"{LICENSE_SERVER_URL}/bind"
         
-        # First get existing license data with retry
-        def get_license_data():
-            response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            return response
-        
-        response = retry_network_request(get_license_data, max_retries=2, base_delay=1.0, max_delay=5.0)
-        
-        license_data = response.json()
-        if not license_data:
-            logger.error(f"License {masked_license} not found in database")
-            return False
-        
-        # Add computer binding with detailed machine info
         machine_info = get_detailed_machine_info()
-        license_data['computer_id'] = computer_id
-        license_data['bound_at'] = datetime.now().isoformat()
-        license_data['binding_method'] = 'automatic'
-        license_data['machine_info'] = machine_info
+        binding_data = {
+            'license_key': license_key.strip(),
+            'computer_id': computer_id,
+            'machine_info': machine_info,
+            'binding_method': 'automatic'
+        }
         
-        # Update the license in Firebase with retry
-        def update_license():
-            response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
+        def bind_license():
+            response = requests.post(url, 
+                                   headers={'Content-Type': 'application/json'},
+                                   json=binding_data, 
+                                   timeout=NETWORK_REQUEST_TIMEOUT)
             response.raise_for_status()
             return response
         
-        retry_network_request(update_license, max_retries=2, base_delay=1.0, max_delay=5.0)
+        retry_network_request(bind_license, max_retries=1, base_delay=3.0, max_delay=8.0)
         
         logger.info(f"Successfully bound license {masked_license} to computer {computer_id}")
         return True
@@ -834,6 +886,36 @@ def bind_license_to_computer(license_key, computer_id):
     except Exception as e:
         logger.error(f"Unexpected error binding license {masked_license}: {e}", exc_info=True)
         return False
+
+def check_server_health():
+    """Quick health check before license validation"""
+    try:
+        # Use Render server for health check instead of direct Firebase
+        response = requests.get(f"{LICENSE_SERVER_URL}/health", timeout=5)
+        return response.status_code == 200
+    except:
+        # Fallback to Firebase if Render server is down
+        try:
+            response = requests.get(f"{FIREBASE_URL}/.json", timeout=5)
+            return response.status_code == 200
+        except:
+            return False
+
+def get_optimal_retry_config():
+    """Adaptive retry configuration based on network quality"""
+    try:
+        start_time = time.time()
+        requests.get("https://www.google.com", timeout=3)
+        latency = time.time() - start_time
+        
+        if latency < 0.5:  # Fast connection
+            return {"retries": 1, "base_delay": 1.0, "max_delay": 5.0}
+        elif latency < 2.0:  # Medium connection  
+            return {"retries": 2, "base_delay": 2.0, "max_delay": 8.0}
+        else:  # Slow connection
+            return {"retries": 1, "base_delay": 3.0, "max_delay": 10.0}
+    except:
+        return {"retries": 1, "base_delay": 3.0, "max_delay": 10.0}  # Conservative fallback
 
 def check_license_with_fingerprint(license_key):
     """Enhanced license validation with comprehensive error handling, retry logic, and logging"""
@@ -859,7 +941,7 @@ def check_license_with_fingerprint(license_key):
             response.raise_for_status()  # Raise exception for HTTP errors
             return response
         
-        response = retry_network_request(make_request, max_retries=3, base_delay=1.0, max_delay=10.0)
+        response = retry_network_request(make_request, max_retries=2, base_delay=2.0, max_delay=8.0)
         
         data = response.json()
         logger.debug(f"License validation response: {bool(data)}")
@@ -1193,51 +1275,33 @@ def validate_license_activation():
         return None
 
 def check_computer_already_licensed(computer_id):
-    """Check if this computer is already bound to any license in Firebase"""
+    """Check if this computer is already bound to any license using Render server"""
     try:
-        logger.debug(f"Scanning Firebase for computer {computer_id}...")
+        logger.debug(f"Checking computer {computer_id} license status...")
         
-        auth_token = get_firebase_auth_token()
-        params = {
-            'auth': auth_token
-        } if auth_token else {}
-
-        # Query for licenses bound to this computer only
-        params.update({
-            'orderBy': json.dumps('computer_id'),
-            'equalTo': json.dumps(computer_id),
-            'limitToFirst': 1
-        })
-
-        url = f"{FIREBASE_URL}/license.json"
-        response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        # Use Render server for license check
+        url = f"{LICENSE_SERVER_URL}/check-computer"
         
-        all_licenses = response.json()
-        if not all_licenses:
-            logger.debug("No licenses found in database")
-            return None
+        def check_computer():
+            response = requests.post(url, 
+                                   headers={'Content-Type': 'application/json'},
+                                   json={'computer_id': computer_id},
+                                   timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
         
-        # Check each license for this computer_id
-        for license_key, license_data in all_licenses.items():
-            if isinstance(license_data, dict):
-                stored_computer_id = license_data.get('computer_id')
-                if stored_computer_id == computer_id:
-                    logger.warning(f"Computer {computer_id} already bound to license {mask_license_key(license_key)}")
-                    return license_key
+        response = retry_network_request(check_computer, max_retries=1, base_delay=3.0, max_delay=8.0)
         
-        logger.debug(f"Computer {computer_id} not found in any existing licenses")
+        data = response.json()
+        if data.get('licensed'):
+            return data.get('license_key')
         return None
         
-    except SecurityError as sec_err:
-        logger.error(f"Security configuration error during license lookup: {sec_err}")
-        return None
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to check computer licensing: {e}")
-        # In case of network error, allow activation (fail-open for user experience)
+        logger.warning(f"Failed to check computer license status: {e}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error checking computer licensing: {e}")
+        logger.error(f"Unexpected error checking computer license: {e}")
         return None
 
 def show_computer_already_licensed_error(existing_license_key):
@@ -1266,33 +1330,28 @@ Contact: info@deltavsolutions.com"""
         logger.error(f"Failed to show security error dialog: {e}")
 
 def unbind_computer_from_license(license_key, computer_id):
-    """Unbind computer from a license (admin function)"""
+    """Unbind computer from a license using Render server (admin function)"""
     try:
         masked_license = mask_license_key(license_key)
         logger.info(f"Unbinding computer {computer_id} from license {masked_license}")
         
-        url = f"{FIREBASE_URL}/license/{license_key}.json"
-        auth_token = get_firebase_auth_token()
-        params = {'auth': auth_token} if auth_token else None
-
-        response = requests.get(url, params=params, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        # Use Render server for unbinding
+        url = f"{LICENSE_SERVER_URL}/unbind"
+        unbind_data = {
+            'license_key': license_key.strip(),
+            'computer_id': computer_id,
+            'unbound_reason': 'administrative_reset'
+        }
         
-        license_data = response.json()
-        if not license_data:
-            logger.error(f"License {masked_license} not found")
-            return False
+        def unbind_license():
+            response = requests.post(url, 
+                                   headers={'Content-Type': 'application/json'},
+                                   json=unbind_data,
+                                   timeout=NETWORK_REQUEST_TIMEOUT)
+            response.raise_for_status()
+            return response
         
-        # Remove computer binding
-        license_data['computer_id'] = None
-        license_data['bound_at'] = None
-        license_data['binding_method'] = None
-        license_data['unbound_at'] = datetime.now().isoformat()
-        license_data['unbound_reason'] = 'administrative_reset'
-        
-        # Update Firebase
-        response = requests.patch(url, params=params, json=license_data, timeout=NETWORK_REQUEST_TIMEOUT)
-        response.raise_for_status()
+        retry_network_request(unbind_license, max_retries=1, base_delay=3.0, max_delay=8.0)
         
         logger.info(f"Successfully unbound computer {computer_id} from license {masked_license}")
         return True
@@ -1683,6 +1742,98 @@ def bind_mousewheel_to_widget(widget, allow_horizontal=True):
         widget.bind("<Shift-Button-4>", _on_shift_mousewheel)
         widget.bind("<Shift-Button-5>", _on_shift_mousewheel)
 
+def bind_canvas_scrolling(canvas, scrollable_frame):
+    """Universal function to bind mouse wheel scrolling to canvas and frame"""
+    def _on_mousewheel(event):
+        try:
+            if hasattr(event, 'delta') and event.delta:
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            elif hasattr(event, 'num') and event.num:
+                if event.num == 4:
+                    canvas.yview_scroll(-1, "units")
+                elif event.num == 5:
+                    canvas.yview_scroll(1, "units")
+        except:
+            pass
+    
+    def _on_shift_mousewheel(event):
+        try:
+            if hasattr(event, 'delta') and event.delta:
+                canvas.xview_scroll(int(-1*(event.delta/120)), "units")
+            elif hasattr(event, 'num') and event.num:
+                if event.num == 4:
+                    canvas.xview_scroll(-1, "units")
+                elif event.num == 5:
+                    canvas.xview_scroll(1, "units")
+        except:
+            pass
+    
+    # Bind to canvas and scrollable frame
+    canvas.bind("<MouseWheel>", _on_mousewheel)
+    scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
+    canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
+    scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
+    
+    # Linux support
+    canvas.bind("<Button-4>", _on_mousewheel)
+    canvas.bind("<Button-5>", _on_mousewheel)
+    scrollable_frame.bind("<Button-4>", _on_mousewheel)
+    scrollable_frame.bind("<Button-5>", _on_mousewheel)
+    canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
+    canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
+    scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
+    scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+    
+    # Bind to any child widgets that might need scrolling
+    for child in scrollable_frame.winfo_children():
+        try:
+            if hasattr(child, 'bind'):
+                child.bind("<MouseWheel>", _on_mousewheel)
+                child.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
+                child.bind("<Button-4>", _on_mousewheel)
+                child.bind("<Button-5>", _on_mousewheel)
+                child.bind("<Shift-Button-4>", _on_shift_mousewheel)
+                child.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        except Exception:
+            pass
+
+class CustomNavigationToolbar(NavigationToolbar2Tk):
+    """Custom navigation toolbar with full text labels"""
+    
+    def __init__(self, canvas, parent):
+        super().__init__(canvas, parent)
+        # Update button labels after a short delay to ensure toolbar is fully initialized
+        self.after(100, self.update_buttons)
+    
+    def update_buttons(self):
+        """Update button labels to show full text"""
+        try:
+            # Get all toolbar buttons and update their text
+            for i, child in enumerate(self.winfo_children()):
+                if hasattr(child, 'configure') and hasattr(child, 'cget'):
+                    try:
+                        current_text = child.cget('text')
+                        # Map standard button texts to full text
+                        text_mapping = {
+                            'Home': 'Home View',
+                            'Back': 'Go Back', 
+                            'Forward': 'Go Forward',
+                            'Pan': 'Pan Tool',
+                            'Zoom': 'Zoom Tool', 
+                            'Save': 'Save Figure',
+                            'Configure': 'Configure Subplots'
+                        }
+                        
+                        if current_text in text_mapping:
+                            child.configure(text=text_mapping[current_text])
+                    except:
+                        # Skip buttons that can't be updated
+                        continue
+                        
+        except Exception as e:
+            # Don't log errors for toolbar button updates to avoid spam
+            pass
+
 class VisualizationWindow:
     """Separate window for displaying visualizations with better UI"""
     def __init__(self, parent, analyzer):
@@ -1690,15 +1841,18 @@ class VisualizationWindow:
         self.analyzer = analyzer
         self.window = None
         self.notebook = None
+        self.toolbars = []  # Track all toolbars for toggle functionality
+        self.canvases = []   # Track all canvases for toolbar management
         
     def create_window(self):
         """Create the visualization window"""
         self.window = tk.Toplevel(self.parent)
         self.window.title("CONFIRM Statistical Analysis - Visualizations")
-        self.window.geometry("2000x900")  # Much wider to show all charts without cutoff
+        # Start with a more reasonable size, will be adjusted by center_window()
+        self.window.geometry("1600x900")  # More reasonable starting size
         self.window.configure(bg='#f5f5f5')
         
-        # Center the window on screen
+        # Center the window on screen (will adjust size if needed)
         self.center_window()
         
         # Make window resizable
@@ -1713,19 +1867,59 @@ class VisualizationWindow:
         return self.window
     
     def center_window(self):
-        """Center the visualization window on screen"""
+        """Center the visualization window on screen with proper bounds checking"""
         self.window.update_idletasks()
         
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         
-        window_width = 1500
-        window_height = 900
+        # Desired window size
+        desired_width = 2200
+        desired_height = 1200
         
+        # Ensure window fits on screen with margins
+        margin = 100  # Leave more space for taskbar and decorations
+        max_width = screen_width - margin
+        max_height = screen_height - margin
+        
+        # Adjust window size if it's too large for the screen
+        window_width = min(desired_width, max_width)
+        window_height = min(desired_height, max_height)
+        
+        # Minimum size to ensure usability
+        min_width = 800
+        min_height = 600
+        window_width = max(window_width, min_width)
+        window_height = max(window_height, min_height)
+        
+        # Calculate center position
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
         
+        # Ensure window doesn't go off-screen (fallback positioning)
+        x = max(10, min(x, screen_width - window_width - 10))  # 10px margin from edges
+        y = max(10, min(y, screen_height - window_height - 10))
+        
+        # Apply geometry
         self.window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Ensure window is on top and visible
+        self.window.lift()
+        self.window.attributes('-topmost', True)
+        self.window.after(1000, lambda: self.window.attributes('-topmost', False))
+        
+        # Log the actual window size for debugging
+        logger.info(f"Visualization window positioned at ({x}, {y}) with size {window_width}x{window_height}")
+        logger.info(f"Screen size: {screen_width}x{screen_height}")
+        
+        # Additional safety check - if window is still problematic, use safe fallback
+        if window_width < 800 or window_height < 600 or x < 0 or y < 0:
+            logger.warning("Window positioning issue detected, using safe fallback")
+            safe_width = min(1200, screen_width - 100)
+            safe_height = min(800, screen_height - 100)
+            safe_x = 50
+            safe_y = 50
+            self.window.geometry(f"{safe_width}x{safe_height}+{safe_x}+{safe_y}")
     
     def setup_ui(self):
         """Setup the visualization window UI"""
@@ -1754,6 +1948,14 @@ class VisualizationWindow:
         # Control buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Navigation toolbar toggle
+        self.show_toolbar = tk.BooleanVar(value=False)
+        toolbar_btn = ttk.Checkbutton(button_frame, text="Show Navigation Tools", 
+                                   variable=self.show_toolbar, 
+                                   command=self.toggle_navigation_toolbar,
+                                   width=18)
+        toolbar_btn.pack(side=tk.LEFT, padx=(0, 10))
         
         ttk.Button(button_frame, text="Export All Charts", 
                   command=self.export_all_charts, width=15).pack(side=tk.LEFT, padx=(0, 10))
@@ -1873,39 +2075,13 @@ class VisualizationWindow:
             ttk.Label(scrollable_frame, text="No comparison data available", 
                      font=('Arial', 14)).pack(pady=50)
         
+        # Configure scrolling with universal function
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling: bind to the figure widget as well
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        # Bind to any Matplotlib figures in the frame
-        for child in scrollable_frame.winfo_children():
-            try:
-                if hasattr(child, 'bind'):
-                    child.bind("<MouseWheel>", _on_mousewheel)
-                    child.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-                    child.bind("<Button-4>", _on_mousewheel)
-                    child.bind("<Button-5>", _on_mousewheel)
-                    child.bind("<Shift-Button-4>", _on_shift_mousewheel)
-                    child.bind("<Shift-Button-5>", _on_shift_mousewheel)
-            except Exception:
-                pass
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_comparison_summary_content(self, parent):
         """Create the comparison summary content"""
@@ -1960,14 +2136,15 @@ Total Samples: {best_config['Total_Samples']:,}"""
         tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
     
     def create_performance_comparison_in_window(self):
-        """Create performance comparison charts"""
+        """Create performance comparison charts in a scrollable window with improved spacing"""
         frame = ttk.Frame(self.notebook)
         self.notebook.add(frame, text="Performance Comparison")
         
-        # Create scrollable canvas
+        # Create scrollable container
         canvas = tk.Canvas(frame, bg='white')
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
         h_scrollbar = ttk.Scrollbar(frame, orient="horizontal", command=canvas.xview)
+        
         scrollable_frame = ttk.Frame(canvas)
         
         scrollable_frame.bind(
@@ -1978,105 +2155,145 @@ Total Samples: {best_config['Total_Samples']:,}"""
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Create figure with subplots
-        fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+        # Create figure with better spacing using new toolbar system
+        fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(16, 12), dpi=100)
         
-        # Accuracy comparison
+        # Classification Accuracy by Sheet (Top Left)
         ax1 = fig.add_subplot(2, 2, 1)
-        sheets = self.analyzer.comparison_summary['SOM_Config']
-        accuracies = self.analyzer.comparison_summary['Global_Fit']
         
-        bars = ax1.bar(range(len(sheets)), accuracies, color='skyblue', edgecolor='navy')
-        ax1.set_title('Classification Accuracy by Sheet', fontsize=14, fontweight='bold')
-        ax1.set_ylabel('Classification Accuracy (%)')
-        ax1.set_xticks(range(len(sheets)))
-        ax1.set_xticklabels(sheets, rotation=45, ha='right')
-        ax1.grid(True, alpha=0.3)
+        # Safe data access with validation
+        if not hasattr(self.analyzer, 'batch_results') or not self.analyzer.batch_results:
+            ax1.text(0.5, 0.5, 'No analysis data available', 
+                     ha='center', va='center', transform=ax1.transAxes, fontsize=14)
+            ax1.set_title('Classification Accuracy by Sheet', fontweight='bold', fontsize=14)
+        else:
+            sheets = list(self.analyzer.batch_results.keys())
+            accuracies = [self.analyzer.batch_results[sheet].get('global_fit', 0) for sheet in sheets]
+            
+            bars = ax1.bar(range(len(sheets)), accuracies, color='#2E86AB', alpha=0.8)
+            ax1.set_xlabel('Sheets', fontweight='bold')
+            ax1.set_ylabel('Classification Accuracy (%)', fontweight='bold')
+            ax1.set_title('Classification Accuracy by Sheet', fontweight='bold', fontsize=14)
+            ax1.set_xticks(range(len(sheets)))
+            ax1.set_xticklabels(sheets, rotation=45, ha='right')
+            
+            # Add value labels on bars
+            for bar, acc in zip(bars, accuracies):
+                height = bar.get_height()
+                offset = max(accuracies)*0.01 if accuracies else 1
+                ax1.text(bar.get_x() + bar.get_width()/2., height + offset,
+                        f'{acc:.1f}%', ha='center', va='bottom', fontweight='bold')
         
-        # Add value labels on bars
-        for bar, acc in zip(bars, accuracies):
-            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
-                    f'{acc:.1f}%', ha='center', va='bottom', fontweight='bold')
-        
-        # Cramer's V comparison
+        # Association Strength (Cramer's V) (Top Right)
         ax2 = fig.add_subplot(2, 2, 2)
-        cramers_v = self.analyzer.comparison_summary['Cramers_V']
         
-        bars2 = ax2.bar(range(len(sheets)), cramers_v, color='lightcoral', edgecolor='darkred')
-        ax2.set_title('Association Strength (Cramer\'s V)', fontsize=14, fontweight='bold')
-        ax2.set_ylabel('Cramer\'s V')
-        ax2.set_xticks(range(len(sheets)))
-        ax2.set_xticklabels(sheets, rotation=45, ha='right')
-        ax2.grid(True, alpha=0.3)
+        if not hasattr(self.analyzer, 'batch_results') or not self.analyzer.batch_results:
+            ax2.text(0.5, 0.5, 'No analysis data available', 
+                     ha='center', va='center', transform=ax2.transAxes, fontsize=14)
+            ax2.set_title('Association Strength (Cramer\'s V)', fontweight='bold', fontsize=14)
+        else:
+            sheets = list(self.analyzer.batch_results.keys())
+            cramers_v = [self.analyzer.batch_results[sheet].get('cramers_v', 0) for sheet in sheets]
+            
+            bars2 = ax2.bar(range(len(sheets)), cramers_v, color='#A23B72', alpha=0.8)
+            ax2.set_xlabel('Sheets', fontweight='bold')
+            ax2.set_ylabel('Cramer\'s V', fontweight='bold')
+            ax2.set_title('Association Strength (Cramer\'s V)', fontweight='bold', fontsize=14)
+            ax2.set_xticks(range(len(sheets)))
+            ax2.set_xticklabels(sheets, rotation=45, ha='right')
+            ax2.set_ylim(0, 1)  # Cramer's V ranges from 0 to 1
+            
+            # Add value labels on bars
+            for bar, cv in zip(bars2, cramers_v):
+                height = bar.get_height()
+                offset = max(cramers_v)*0.02 if cramers_v else 0.02
+                ax2.text(bar.get_x() + bar.get_width()/2., height + offset,
+                        f'{cv:.3f}', ha='center', va='bottom', fontweight='bold')
         
-        # Utilization comparison
+        # Neuron Utilization (Bottom Left)
         ax3 = fig.add_subplot(2, 2, 3)
-        utilization = self.analyzer.comparison_summary['Utilization']
         
-        bars3 = ax3.bar(range(len(sheets)), utilization, color='lightgreen', edgecolor='darkgreen')
-        ax3.set_title('Neuron Utilization', fontsize=14, fontweight='bold')
-        ax3.set_ylabel('Neuron Utilization (%)')
-        ax3.set_xticks(range(len(sheets)))
-        ax3.set_xticklabels(sheets, rotation=45, ha='right')
-        ax3.grid(True, alpha=0.3)
+        if not hasattr(self.analyzer, 'batch_results') or not self.analyzer.batch_results:
+            ax3.text(0.5, 0.5, 'No analysis data available', 
+                     ha='center', va='center', transform=ax3.transAxes, fontsize=14)
+            ax3.set_title('Neuron Utilization', fontweight='bold', fontsize=14)
+        else:
+            utilizations = []
+            sheets = list(self.analyzer.batch_results.keys())
+            for sheet in sheets:
+                total = self.analyzer.batch_results[sheet].get('total_neurons', 1)
+                active = self.analyzer.batch_results[sheet].get('active_neurons', 0)
+                util = (active / total * 100) if total > 0 else 0
+                utilizations.append(util)
+            
+            bars3 = ax3.bar(range(len(sheets)), utilizations, color='#F18F01', alpha=0.8)
+            ax3.set_xlabel('Sheets', fontweight='bold')
+            ax3.set_ylabel('Neuron Utilization (%)', fontweight='bold')
+            ax3.set_title('Neuron Utilization', fontweight='bold', fontsize=14)
+            ax3.set_xticks(range(len(sheets)))
+            ax3.set_xticklabels(sheets, rotation=45, ha='right')
+            
+            # Add value labels on bars
+            for bar, util in zip(bars3, utilizations):
+                height = bar.get_height()
+                offset = max(utilizations)*0.01 if utilizations else 1
+                ax3.text(bar.get_x() + bar.get_width()/2., height + offset,
+                        f'{util:.1f}%', ha='center', va='bottom', fontweight='bold')
         
-        # Combined scatter plot
+        # Performance Overview scatter plot
         ax4 = fig.add_subplot(2, 2, 4)
-        scatter = ax4.scatter(cramers_v, accuracies, c=utilization, 
-                             cmap='viridis', s=100, alpha=0.7, edgecolors='black')
-        ax4.set_xlabel('Cramer\'s V (Association Strength)')
-        ax4.set_ylabel('Classification Accuracy (%)')
-        ax4.set_title('Performance Overview', fontsize=14, fontweight='bold')
-        ax4.grid(True, alpha=0.3)
         
-        # Add colorbar
-        cbar = fig.colorbar(scatter, ax=ax4)
-        cbar.set_label('Neuron Utilization (%)')
+        if not hasattr(self.analyzer, 'batch_results') or not self.analyzer.batch_results:
+            ax4.text(0.5, 0.5, 'No analysis data available', 
+                     ha='center', va='center', transform=ax4.transAxes, fontsize=14)
+            ax4.set_title('Performance Overview', fontweight='bold', fontsize=14)
+        else:
+            sheets = list(self.analyzer.batch_results.keys())
+            accuracies = [self.analyzer.batch_results[sheet].get('global_fit', 0) for sheet in sheets]
+            cramers_v = [self.analyzer.batch_results[sheet].get('cramers_v', 0) for sheet in sheets]
+            
+            # Create scatter plot with color gradient
+            markers = ['o', 's', '^', 'D', 'v', 'p']
+            if len(sheets) > 1:
+                # Create a colormap for gradient
+                cmap = plt.cm.viridis
+                norm = plt.Normalize(vmin=0, vmax=len(sheets)-1)
+                
+                for i, (sheet, acc, cv) in enumerate(zip(sheets, accuracies, cramers_v)):
+                    color = cmap(norm(i))
+                    marker = markers[i % len(markers)]
+                    ax4.scatter(cv, acc, color=color, marker=marker, s=120, 
+                               alpha=0.8, label=sheet, edgecolors='black', linewidth=1)
+            else:
+                # Single point case
+                ax4.scatter(cramers_v[0] if cramers_v else 0, 
+                           accuracies[0] if accuracies else 0, 
+                           color='#2E86AB', marker='o', s=150, 
+                           alpha=0.8, label=sheets[0], edgecolors='black', linewidth=1)
+            
+            ax4.set_xlabel("Cramer's V (Association Strength)", fontweight='bold')
+            ax4.set_ylabel('Classification Accuracy (%)', fontweight='bold')
+            ax4.set_title('Performance Overview', fontweight='bold', fontsize=14)
+            ax4.grid(True, alpha=0.3)
+            ax4.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            
+            # Set appropriate axis limits
+            ax4.set_xlim(0, max(cramers_v) * 1.1 if cramers_v else 1)
+            ax4.set_ylim(0, max(accuracies) * 1.1 if accuracies else 100)
         
-        # Add sheet labels to scatter points
-        for i, sheet in enumerate(sheets):
-            ax4.annotate(sheet, (cramers_v.iloc[i], accuracies.iloc[i]), 
-                        xytext=(5, 5), textcoords='offset points', 
-                        fontsize=8, alpha=0.8)
+        # Improve layout with better spacing
+        fig.tight_layout(pad=4.0)
         
-        fig.tight_layout()
-        
-        canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-        canvas_fig.draw()
+        # Pack the canvas widget
         canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
-        # Configure scrolling
+        # Configure scrolling with universal function
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        for child in scrollable_frame.winfo_children():
-            try:
-                if hasattr(child, 'bind'):
-                    child.bind("<MouseWheel>", _on_mousewheel)
-                    child.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-                    child.bind("<Button-4>", _on_mousewheel)
-                    child.bind("<Button-5>", _on_mousewheel)
-                    child.bind("<Shift-Button-4>", _on_shift_mousewheel)
-                    child.bind("<Shift-Button-5>", _on_shift_mousewheel)
-            except Exception:
-                pass
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_individual_sheets_in_window(self):
         """Create individual sheet details"""
@@ -2128,28 +2345,13 @@ Total Samples: {best_config['Total_Samples']:,}"""
         sheet_var.trace('w', update_sheet_display)
         update_sheet_display()  # Initial load
         
-        # Pack canvas and scrollbar
+        # Pack canvas and scrollbar with universal scrolling
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_sheet_detail_content(self, parent, sheet_name):
         """Create detailed content for a specific sheet"""
@@ -2180,8 +2382,12 @@ Inactive {unit_term}: {sheet_data['percent_undefined']:.1f}%"""
             self.create_mini_heatmap(matrix_frame, sheet_data['confusion_matrix'], sheet_name)
     
     def create_mini_heatmap(self, parent, confusion_matrix, sheet_name=None):
-        """Create a small heatmap for the confusion matrix with improved visibility"""
+        """Create a small heatmap for the confusion matrix with improved visibility and spacing"""
         try:
+            # Create container frame for better layout control
+            container = ttk.Frame(parent)
+            container.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+            
             # Apply normalization if checkbox is checked
             display_matrix = confusion_matrix
             matrix_title = 'Confusion Matrix Heatmap'
@@ -2199,35 +2405,39 @@ Inactive {unit_term}: {sheet_data['percent_undefined']:.1f}%"""
             if sheet_name:
                 matrix_title = f"{matrix_title} - {sheet_name}"
             
-            fig = Figure(figsize=(10, 8), dpi=100, facecolor='white')
+            # Create figure with better spacing using the new toolbar system
+            fig, canvas = self.create_figure_with_toolbar(container, figsize=(12, 9), dpi=100)
             ax = fig.add_subplot(111)
             
             # Create heatmap with improved visibility
-            im = ax.imshow(display_matrix.values, cmap='Blues', aspect='auto')
-            
-            # Set ticks and labels with better formatting
-            ax.set_xticks(range(len(display_matrix.columns)))
-            ax.set_yticks(range(len(display_matrix.index)))
-            ax.set_xticklabels(display_matrix.columns, rotation=45, ha='right', fontsize=10)
-            ax.set_yticklabels(display_matrix.index, fontsize=10)
+            if hasattr(display_matrix, 'values'):  # DataFrame
+                im = ax.imshow(display_matrix.values, cmap='Blues', aspect='auto')
+                # Set ticks and labels with better formatting
+                ax.set_xticks(range(len(display_matrix.columns)))
+                ax.set_yticks(range(len(display_matrix.index)))
+                ax.set_xticklabels(display_matrix.columns, rotation=45, ha='right', fontsize=10)
+                ax.set_yticklabels(display_matrix.index, fontsize=10)
+            else:  # numpy array
+                im = ax.imshow(display_matrix, cmap='Blues', aspect='auto')
             
             # Add text annotations with better contrast
-            for i in range(len(display_matrix.index)):
-                for j in range(len(display_matrix.columns)):
-                    value = display_matrix.iloc[i, j]
-                    # Determine text color based on background intensity
-                    text_color = 'white' if value > display_matrix.values.max() * 0.5 else 'black'
-                    
-                    if hasattr(self.analyzer, 'normalize_confusion_matrices') and self.analyzer.normalize_confusion_matrices.get():
-                        # Show as percentage with 1 decimal place
-                        text = ax.text(j, i, f"{value:.1f}%",
-                                      ha="center", va="center", color=text_color, 
-                                      fontweight='bold', fontsize=10)
-                    else:
-                        # Show as integer count
-                        text = ax.text(j, i, f"{int(value)}",
-                                      ha="center", va="center", color=text_color, 
-                                      fontweight='bold', fontsize=10)
+            if hasattr(display_matrix, 'values'):
+                for i in range(len(display_matrix.index)):
+                    for j in range(len(display_matrix.columns)):
+                        value = display_matrix.iloc[i, j]
+                        # Determine text color based on background intensity
+                        text_color = 'white' if value > display_matrix.values.max() * 0.5 else 'black'
+                        
+                        if hasattr(self.analyzer, 'normalize_confusion_matrices') and self.analyzer.normalize_confusion_matrices.get():
+                            # Show as percentage with 1 decimal place
+                            text = ax.text(j, i, f"{value:.1f}%",
+                                          ha="center", va="center", color=text_color, 
+                                          fontweight='bold', fontsize=10)
+                        else:
+                            # Show as integer count
+                            text = ax.text(j, i, f"{int(value)}",
+                                          ha="center", va="center", color=text_color, 
+                                          fontweight='bold', fontsize=10)
             
             # Set title with better formatting
             ax.set_title(matrix_title, fontsize=14, fontweight='bold', pad=20, color='#2E86AB')
@@ -2239,18 +2449,19 @@ Inactive {unit_term}: {sheet_data['percent_undefined']:.1f}%"""
             cbar.set_label('Count' if 'Normalized' not in matrix_title else 'Percentage', 
                           fontsize=11, fontweight='bold')
             
-            fig.tight_layout(pad=2.0)
+            # Improve layout with better spacing
+            fig.tight_layout(pad=3.0)
             
-            canvas = FigureCanvasTkAgg(fig, parent)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            # Pack the canvas widget
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             
         except Exception as e:
             logger.error(f"Error creating mini heatmap: {e}")
-            # Create error message
-            error_label = ttk.Label(parent, text=f"Failed to create heatmap: {str(e)}", 
-                                   font=('Arial', 10), foreground='red')
-            error_label.pack(pady=10)
+            # Create error placeholder
+            error_frame = ttk.Frame(parent)
+            error_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+            ttk.Label(error_frame, text=f"Error creating heatmap: {str(e)}", 
+                     font=('Arial', 12), foreground='red').pack(expand=True)
     
     def create_multi_sheet_side_by_side_view(self):
         """Create side-by-side view of multiple sheets simultaneously"""
@@ -2304,24 +2515,8 @@ Inactive {unit_term}: {sheet_data['percent_undefined']:.1f}%"""
         main_scrollbar_v.pack(side="right", fill="y")
         main_scrollbar_h.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling (vertical and horizontal)
-        def _on_mousewheel(event):
-            main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            main_canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        main_canvas.bind("<MouseWheel>", _on_mousewheel)
-        main_scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        main_canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        main_scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        # Linux support
-        main_canvas.bind("<Button-4>", _on_mousewheel)
-        main_canvas.bind("<Button-5>", _on_mousewheel)
-        main_scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        main_scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        main_canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        main_canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        main_scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        main_scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(main_canvas, main_scrollable_frame)
     
     def create_sheet_summary_content(self, parent, sheet_name):
         """Create summary content for a single sheet in multi-view"""
@@ -2470,15 +2665,8 @@ Neuron Utilization: {(sheet_data['active_neurons']/sheet_data['total_neurons']*1
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_detailed_sheet_content(self, parent, sheet_name):
         """Create detailed content for each sheet in combined view"""
@@ -2969,23 +3157,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_multi_sheet_pie_chart_analysis_in_window(self):
         """Create comprehensive pie chart analysis for multi-sheet comparison"""
@@ -3175,23 +3348,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
 
     
@@ -3237,7 +3395,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 if sheet_name:
                     matrix_title = f"{matrix_title} - {sheet_name}"
                 
-                fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
+                # Create figure with better spacing using new toolbar system
+                fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(12, 8), dpi=100)
                 ax = fig.add_subplot(111)
                 
                 # Create heatmap
@@ -3249,10 +3408,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 ax.set_xlabel('Actual')
                 ax.set_ylabel('Predicted')
                 
-                fig.tight_layout()
+                # Improve layout with better spacing
+                fig.tight_layout(pad=3.0)
                 
-                canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-                canvas_fig.draw()
+                # Pack the canvas widget
                 canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             else:
                 ttk.Label(scrollable_frame, text="No confusion matrix data available", 
@@ -3267,23 +3426,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_distribution_charts_in_window(self, sheet_name=None):
         """Create distribution charts"""
@@ -3307,7 +3451,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         
         try:
             if hasattr(self.analyzer, 'confusion_matrix') and self.analyzer.confusion_matrix is not None:
-                fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
+                # Create figure with better spacing using new toolbar system
+                fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(12, 8), dpi=100)
                 
                 # Combined Actual vs Predicted distribution in one chart
                 ax = fig.add_subplot(1, 1, 1)
@@ -3318,26 +3463,30 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 x = np.arange(len(actual_counts))
                 width = 0.35
                 
-                # Create side-by-side bars
-                ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
-                       color='skyblue', edgecolor='navy')
-                ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
-                       color='lightcoral', edgecolor='darkred')
+                # Create side-by-side bars with enhanced styling
+                bars1 = ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
+                              color='#4A90E2', edgecolor='#2E5C8A', linewidth=2, alpha=0.8)
+                bars2 = ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
+                              color='#E74C3C', edgecolor='#A93226', linewidth=2, alpha=0.8)
                 
                 base_title = 'Actual vs Predicted Type Distribution'
                 title = f"{base_title} - {sheet_name}" if sheet_name else base_title
+                # Add value labels on bars
+                self.add_value_labels(ax, bars1)
+                self.add_value_labels(ax, bars2)
+                
                 ax.set_title(title, fontsize=14, fontweight='bold')
-                ax.set_ylabel('Count')
-                ax.set_xlabel('Type')
+                ax.set_ylabel('Count', fontweight='bold')
+                ax.set_xlabel('Type', fontweight='bold')
                 ax.set_xticks(x)
                 ax.set_xticklabels(actual_counts.index, rotation=45, ha='right')
                 ax.legend()
                 ax.grid(True, alpha=0.3)
                 
-                fig.tight_layout()
+                # Improve layout with better spacing
+                fig.tight_layout(pad=3.0)
                 
-                canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-                canvas_fig.draw()
+                # Pack the canvas widget
                 canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             else:
                 ttk.Label(scrollable_frame, text="No distribution data available", 
@@ -3352,23 +3501,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_metrics_comparison_in_window(self, sheet_name=None):
         """Create metrics comparison chart"""
@@ -3392,7 +3526,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         
         try:
             if hasattr(self.analyzer, 'results') and 'class_metrics' in self.analyzer.results:
-                fig = Figure(figsize=(12, 8), dpi=100, facecolor='white')
+                # Create figure with better spacing using new toolbar system
+                fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(12, 8), dpi=100)
                 ax = fig.add_subplot(111)
                 
                 # Prepare data
@@ -3404,25 +3539,34 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
                 x = np.arange(len(classes))
                 width = 0.25
                 
-                ax.bar(x - width, precisions, width, label='Precision', color='skyblue', edgecolor='navy')
-                ax.bar(x, recalls, width, label='Recall', color='lightgreen', edgecolor='darkgreen')
-                ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightcoral', edgecolor='darkred')
+                # Create performance metrics bars with enhanced styling
+                bars1 = ax.bar(x - width, precisions, width, label='Precision', 
+                              color='#3498DB', edgecolor='#2471A3', linewidth=2, alpha=0.8)
+                bars2 = ax.bar(x, recalls, width, label='Recall', 
+                              color='#27AE60', edgecolor='#1E8449', linewidth=2, alpha=0.8)
+                bars3 = ax.bar(x + width, f1_scores, width, label='F1-Score', 
+                              color='#E67E22', edgecolor='#BA4A00', linewidth=2, alpha=0.8)
+                
+                # Add value labels on bars
+                self.add_value_labels(ax, bars1, format_func=lambda x: f'{x:.2f}')
+                self.add_value_labels(ax, bars2, format_func=lambda x: f'{x:.2f}')
+                self.add_value_labels(ax, bars3, format_func=lambda x: f'{x:.2f}')
                 
                 base_title = 'Performance Metrics by Class'
                 title = f"{base_title} - {sheet_name}" if sheet_name else base_title
                 ax.set_title(title, fontsize=14, fontweight='bold')
-                ax.set_ylabel('Score')
-                ax.set_xlabel('Classes')
+                ax.set_ylabel('Score', fontweight='bold')
+                ax.set_xlabel('Classes', fontweight='bold')
                 ax.set_xticks(x)
                 ax.set_xticklabels(classes, rotation=45, ha='right')
                 ax.legend()
                 ax.grid(True, alpha=0.3)
                 ax.set_ylim(0, 1.1)
                 
-                fig.tight_layout()
+                # Improve layout with better spacing
+                fig.tight_layout(pad=3.0)
                 
-                canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-                canvas_fig.draw()
+                # Pack the canvas widget
                 canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             else:
                 ttk.Label(scrollable_frame, text="No metrics data available", 
@@ -3437,23 +3581,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_radar_analysis_in_window(self, sheet_name=None):
         """Create comprehensive radar chart analysis for single sheet"""
@@ -3476,8 +3605,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=h_scrollbar.set)
         
         try:
-            # Create figure with subplots for different radar analyses
-            fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+            # Create figure with better spacing using new toolbar system
+            fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(15, 10), dpi=100)
             
             if hasattr(self.analyzer, 'results') and 'class_metrics' in self.analyzer.results:
                 if len(self.analyzer.results['class_metrics']) >= 3:
@@ -3626,10 +3755,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
             if sheet_name:
                 fig.suptitle(f'Radar Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
             
-            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1])
+            # Improve layout with better spacing
+            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1], pad=3.0)
             
-            canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-            canvas_fig.draw()
+            # Pack the canvas widget
             canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             
         except Exception as e:
@@ -3641,23 +3770,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_pie_chart_analysis_in_window(self, sheet_name=None):
         """Create comprehensive pie chart analysis for single sheet"""
@@ -3680,8 +3794,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=h_scrollbar.set)
         
         try:
-            # Create figure with subplots for different pie analyses
-            fig = Figure(figsize=(15, 10), dpi=100, facecolor='white')
+            # Create figure with better spacing using new toolbar system
+            fig, canvas_fig = self.create_figure_with_toolbar(scrollable_frame, figsize=(15, 10), dpi=100)
             
             if hasattr(self.analyzer, 'confusion_matrix') and self.analyzer.confusion_matrix is not None:
                 # Class distribution pie chart
@@ -3826,10 +3940,10 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
             if sheet_name:
                 fig.suptitle(f'Pie Chart Analysis - {sheet_name}', fontsize=16, fontweight='bold', y=0.98)
             
-            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1])
+            # Improve layout with better spacing
+            fig.tight_layout(rect=[0, 0, 1, 0.96] if sheet_name else [0, 0, 1, 1], pad=3.0)
             
-            canvas_fig = FigureCanvasTkAgg(fig, scrollable_frame)
-            canvas_fig.draw()
+            # Pack the canvas widget
             canvas_fig.get_tk_widget().pack(fill=tk.BOTH, expand=True)
             
         except Exception as e:
@@ -3841,23 +3955,8 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
         scrollbar.pack(side="right", fill="y")
         h_scrollbar.pack(side="bottom", fill="x")
         
-        # Mouse wheel scrolling
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        def _on_shift_mousewheel(event):
-            canvas.xview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind("<MouseWheel>", _on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", _on_mousewheel)
-        canvas.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-MouseWheel>", _on_shift_mousewheel)
-        canvas.bind("<Button-4>", _on_mousewheel)
-        canvas.bind("<Button-5>", _on_mousewheel)
-        scrollable_frame.bind("<Button-4>", _on_mousewheel)
-        scrollable_frame.bind("<Button-5>", _on_mousewheel)
-        canvas.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        canvas.bind("<Shift-Button-5>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-4>", _on_shift_mousewheel)
-        scrollable_frame.bind("<Shift-Button-5>", _on_shift_mousewheel)
+        # Apply universal mouse wheel scrolling
+        bind_canvas_scrolling(canvas, scrollable_frame)
     
     def create_placeholder(self):
         """Create placeholder when no data is available"""
@@ -3886,14 +3985,92 @@ Neuron Utilization: {config_data['Utilization']:.1f}%"""
     
     def refresh_visualizations(self):
         """Refresh all visualizations"""
-        # Clear existing tabs
-        for tab in self.notebook.tabs():
-            self.notebook.forget(tab)
-        
-        # Reload visualizations
-        self.load_visualizations()
-        
-        messagebox.showinfo("Refresh Complete", "Visualizations refreshed!")
+        try:
+            # Clear existing toolbars and canvases
+            self.clear_toolbars_and_canvases()
+            
+            # Reload visualizations
+            self.load_visualizations()
+            messagebox.showinfo("Refresh", "Visualizations refreshed successfully!")
+        except Exception as e:
+            messagebox.showerror("Refresh Error", f"Failed to refresh visualizations: {str(e)}")
+    
+    def toggle_navigation_toolbar(self):
+        """Toggle navigation toolbar visibility for all plots"""
+        try:
+            show_toolbar = self.show_toolbar.get()
+            
+            if show_toolbar:
+                # Show toolbars for all existing canvases
+                for i, canvas in enumerate(self.canvases):
+                    if canvas and hasattr(canvas, 'get_tk_widget'):
+                        parent_frame = canvas.get_tk_widget().master
+                        if parent_frame and not any(toolbar.master == parent_frame for toolbar in self.toolbars):
+                            toolbar = CustomNavigationToolbar(canvas, parent_frame)
+                            toolbar.update()
+                            # Make sure the toolbar is visible
+                            toolbar.pack(side=tk.BOTTOM, fill=tk.X, after=canvas.get_tk_widget())
+                            self.toolbars.append(toolbar)
+            else:
+                # Hide all toolbars
+                for toolbar in self.toolbars:
+                    if hasattr(toolbar, 'destroy'):
+                        toolbar.destroy()
+                self.toolbars.clear()
+            
+            # Refresh the display
+            if self.window:
+                self.window.update_idletasks()
+                
+        except Exception as e:
+            logger.error(f"Error toggling navigation toolbar: {e}")
+    
+    def clear_toolbars_and_canvases(self):
+        """Clear existing toolbars and canvases before refresh"""
+        try:
+            # Clear toolbars
+            for toolbar in self.toolbars:
+                if hasattr(toolbar, 'destroy'):
+                    toolbar.destroy()
+            self.toolbars.clear()
+            
+            # Clear canvases
+            self.canvases.clear()
+            
+        except Exception as e:
+            logger.error(f"Error clearing toolbars and canvases: {e}")
+    
+    def create_figure_with_toolbar(self, parent, figsize=(10, 8), dpi=100):
+        """Create a matplotlib figure with optional navigation toolbar"""
+        try:
+            # Create figure
+            fig = Figure(figsize=figsize, dpi=dpi, facecolor='white')
+            
+            # Create canvas
+            canvas = FigureCanvasTkAgg(fig, parent)
+            canvas.draw()
+            
+            # Track canvas for toolbar management
+            self.canvases.append(canvas)
+            
+            # Add toolbar if enabled
+            if self.show_toolbar.get():
+                toolbar = CustomNavigationToolbar(canvas, parent)
+                toolbar.update()
+                # Make sure the toolbar is visible
+                toolbar.pack(side=tk.BOTTOM, fill=tk.X, after=canvas.get_tk_widget())
+                self.toolbars.append(toolbar)
+            
+            return fig, canvas
+            
+        except Exception as e:
+            logger.error(f"Error creating figure with toolbar: {e}")
+            # Fallback to basic figure
+            fig = Figure(figsize=figsize, dpi=dpi, facecolor='white')
+            canvas = FigureCanvasTkAgg(fig, parent)
+            canvas.draw()
+            self.canvases.append(canvas)
+            return fig, canvas
     
     def on_close(self):
         """Handle window close event"""
@@ -4545,8 +4722,17 @@ designer = ProfessionalVisualizationDesigner()
 class NumpyEncoder(json.JSONEncoder):
     """Custom JSON encoder for numpy types and other non-serializable objects"""
     def default(self, obj):
+        # Handle pandas DataFrames
+        if hasattr(obj, 'to_dict'):
+            try:
+                return obj.to_dict()
+            except:
+                return obj.to_dict('records')
+        # Handle pandas Series
+        elif hasattr(obj, 'to_list'):
+            return obj.to_list()
         # Handle NumPy integer types
-        if isinstance(obj, np.integer):
+        elif isinstance(obj, np.integer):
             return int(obj)
         # Handle NumPy floating point types
         elif isinstance(obj, np.floating):
@@ -5423,14 +5609,27 @@ class StatisticalAnalyzer:
         x = np.arange(len(actual_counts))
         width = 0.35
         
-        ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
-               color='skyblue', edgecolor='navy')
-        ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
-               color='lightcoral', edgecolor='darkred')
+        # Create enhanced side-by-side bars
+        bars1 = ax.bar(x - width/2, actual_counts.values, width, label='Actual', 
+                       color='#4A90E2', edgecolor='#2E5C8A', linewidth=2, alpha=0.8)
+        bars2 = ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', 
+                       color='#E74C3C', edgecolor='#A93226', linewidth=2, alpha=0.8)
+        
+        # Add value labels on bars
+        for bar in bars1:
+            height = bar.get_height()
+            offset = max(actual_counts.values)*0.01 if len(actual_counts.values) > 0 else 1
+            ax.text(bar.get_x() + bar.get_width()/2., height + offset,
+                   f'{int(height)}', ha='center', va='bottom', fontweight='bold')
+        for bar in bars2:
+            height = bar.get_height()
+            offset = max(predicted_counts.values)*0.01 if len(predicted_counts.values) > 0 else 1
+            ax.text(bar.get_x() + bar.get_width()/2., height + offset,
+                   f'{int(height)}', ha='center', va='bottom', fontweight='bold')
         
         ax.set_title(f'Actual vs Predicted Type Distribution - {sheet_name}', fontsize=14, fontweight='bold')
-        ax.set_ylabel('Count')
-        ax.set_xlabel('Type')
+        ax.set_ylabel('Count', fontweight='bold')
+        ax.set_xlabel('Type', fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(actual_counts.index, rotation=45, ha='right')
         ax.legend()
@@ -5455,12 +5654,30 @@ class StatisticalAnalyzer:
         x = np.arange(len(classes))
         width = 0.25
         
-        ax.bar(x - width, precisions, width, label='Precision', color='skyblue', edgecolor='navy')
-        ax.bar(x, recalls, width, label='Recall', color='lightgreen', edgecolor='darkgreen')
-        ax.bar(x + width, f1_scores, width, label='F1-Score', color='lightcoral', edgecolor='darkred')
+        # Create enhanced performance metrics bars
+        bars1 = ax.bar(x - width, precisions, width, label='Precision', 
+                      color='#3498DB', edgecolor='#2471A3', linewidth=2, alpha=0.8)
+        bars2 = ax.bar(x, recalls, width, label='Recall', 
+                      color='#27AE60', edgecolor='#1E8449', linewidth=2, alpha=0.8)
+        bars3 = ax.bar(x + width, f1_scores, width, label='F1-Score', 
+                      color='#E67E22', edgecolor='#BA4A00', linewidth=2, alpha=0.8)
         
-        ax.set_ylabel('Score')
-        ax.set_xlabel('Class')
+        # Add value labels on bars
+        for bar in bars1:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                   f'{height:.2f}', ha='center', va='bottom', fontweight='bold')
+        for bar in bars2:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                   f'{height:.2f}', ha='center', va='bottom', fontweight='bold')
+        for bar in bars3:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                   f'{height:.2f}', ha='center', va='bottom', fontweight='bold')
+        
+        ax.set_ylabel('Score', fontweight='bold')
+        ax.set_xlabel('Class', fontweight='bold')
         ax.set_title(f'Per-Class Performance Metrics - {sheet_name}', fontsize=14, fontweight='bold')
         ax.set_xticks(x)
         ax.set_xticklabels(classes, rotation=45, ha='right')
@@ -6140,6 +6357,55 @@ class StatisticalAnalyzer:
             self.update_activity_indicator("Error occurred")
             messagebox.showerror("Error", f"Failed to initialize visualization window:\n{str(e)}")
     
+    def verify_project_integrity(self, project_data):
+        """Verify project data integrity before/after save/load"""
+        issues = []
+        analysis_results = project_data.get('analysis_results', {})
+        
+        if not analysis_results:
+            issues.append("No analysis results found")
+            return issues
+            
+        for sheet_name, result_data in analysis_results.items():
+            # Check for critical missing fields
+            critical_fields = ['status', 'sheet_name']
+            for field in critical_fields:
+                if field not in result_data:
+                    issues.append(f"{sheet_name}: Missing {field}")
+            
+            # Check matrix data integrity
+            if 'confusion_matrix' not in result_data:
+                issues.append(f"{sheet_name}: Missing confusion matrix")
+            elif not result_data['confusion_matrix']:
+                issues.append(f"{sheet_name}: Empty confusion matrix")
+            
+            # Check dimension consistency
+            matrix_shape = result_data.get('matrix_shape')
+            total_rows = result_data.get('total_rows')
+            total_cols = result_data.get('total_cols')
+            
+            if matrix_shape and len(matrix_shape) >= 2:
+                if total_rows is not None and matrix_shape[0] != total_rows:
+                    issues.append(f"{sheet_name}: matrix_shape[0] != total_rows")
+                if total_cols is not None and matrix_shape[1] != total_cols:
+                    issues.append(f"{sheet_name}: matrix_shape[1] != total_cols")
+            elif total_rows is not None and total_cols is not None:
+                # If no matrix_shape, at least check total_rows/total_cols consistency
+                if total_rows < 0 or total_cols < 0:
+                    issues.append(f"{sheet_name}: Invalid dimensions")
+            
+            # Check for statistical data
+            if 'statistics' not in result_data:
+                issues.append(f"{sheet_name}: Missing statistics")
+            else:
+                stats = result_data['statistics']
+                required_stats = ['chi2', 'p_value', 'degrees_of_freedom']
+                for stat in required_stats:
+                    if stat not in stats:
+                        issues.append(f"{sheet_name}: Missing {stat} in statistics")
+        
+        return issues
+
     def save_project(self):
         """Save current project analysis to a file"""
         try:
@@ -6189,6 +6455,22 @@ class StatisticalAnalyzer:
                 }
             }
             
+            # Verify data integrity before saving
+            temp_project_data = {'analysis_results': self.batch_results}
+            integrity_issues = self.verify_project_integrity(temp_project_data)
+            if integrity_issues:
+                logger.warning(f"Data integrity issues detected before save: {integrity_issues}")
+                # Show warning but continue with save
+                issue_summary = "\n".join(integrity_issues[:5])  # Show first 5 issues
+                if len(integrity_issues) > 5:
+                    issue_summary += f"\n... and {len(integrity_issues) - 5} more issues"
+                
+                response = messagebox.askyesno("Data Integrity Issues", 
+                                             f"Potential data issues detected:\n\n{issue_summary}\n\n"
+                                             f"Continue saving anyway?")
+                if not response:
+                    return
+            
             # Process each analysis result for saving
             for sheet_name, result in self.batch_results.items():
                 # Extract matrix dimensions
@@ -6210,6 +6492,7 @@ class StatisticalAnalyzer:
                 serializable_result = {
                     'status': result.get('status'),
                     'sheet_name': sheet_name,
+                    'matrix_shape': list(matrix_shape) if matrix_shape and len(matrix_shape) >= 2 else [0, 0],  # Preserve original shape
                     'total_rows': total_rows,
                     'total_cols': total_cols,
                     'data_completeness': data_completeness,
@@ -6223,18 +6506,39 @@ class StatisticalAnalyzer:
                     'total_observations': result.get('total_observations', 0)
                 }
                 
-                # Save class metrics if available
+                # Save class metrics if available with better error handling
                 if 'class_metrics' in result:
                     try:
                         serializable_result['class_metrics'] = result['class_metrics']
-                    except Exception:
-                        pass
+                        logger.debug(f"Successfully saved class_metrics for '{sheet_name}'")
+                    except Exception as metrics_error:
+                        logger.error(f"Failed to serialize class_metrics for '{sheet_name}': {metrics_error}")
+                        # Continue without class_metrics rather than failing entire save
                 
-                # Save labels if available
+                # Save labels if available with better error handling
                 if 'category_labels' in result:
-                    serializable_result['category_labels'] = list(result['category_labels']) if hasattr(result['category_labels'], '__iter__') else result['category_labels']
+                    try:
+                        labels = result['category_labels']
+                        if hasattr(labels, '__iter__') and not isinstance(labels, str):
+                            serializable_result['category_labels'] = list(labels)
+                        else:
+                            serializable_result['category_labels'] = labels
+                        logger.debug(f"Successfully saved category_labels for '{sheet_name}'")
+                    except Exception as labels_error:
+                        logger.error(f"Failed to serialize category_labels for '{sheet_name}': {labels_error}")
+                        # Continue without labels rather than failing entire save
+                        
                 if 'row_labels' in result:
-                    serializable_result['row_labels'] = list(result['row_labels']) if hasattr(result['row_labels'], '__iter__') else result['row_labels']
+                    try:
+                        labels = result['row_labels']
+                        if hasattr(labels, '__iter__') and not isinstance(labels, str):
+                            serializable_result['row_labels'] = list(labels)
+                        else:
+                            serializable_result['row_labels'] = labels
+                        logger.debug(f"Successfully saved row_labels for '{sheet_name}'")
+                    except Exception as labels_error:
+                        logger.error(f"Failed to serialize row_labels for '{sheet_name}': {labels_error}")
+                        # Continue without labels rather than failing entire save
                 
                 # Include statistics from QC summary and direct result values
                 serializable_result['statistics'] = {
@@ -6246,16 +6550,37 @@ class StatisticalAnalyzer:
                     'expected_freq_ok': bool(qc_summary.get('expected_freq_ok', False))
                 }
                 
-                # Include confusion matrix if available (convert to list for JSON)
+                # Include confusion matrix if available (convert to list for JSON) with enhanced error handling
                 if 'confusion_matrix' in result and result['confusion_matrix'] is not None:
                     try:
                         matrix = result['confusion_matrix']
                         if hasattr(matrix, 'tolist'):  # numpy array
-                            serializable_result['confusion_matrix'] = matrix.tolist()
+                            matrix_list = matrix.tolist()
+                            # Validate matrix data before saving
+                            if matrix_list and len(matrix_list) > 0:
+                                serializable_result['confusion_matrix'] = matrix_list
+                                logger.debug(f"Successfully saved confusion matrix for '{sheet_name}' ({len(matrix_list)}x{len(matrix_list[0]) if matrix_list[0] else 0})")
+                            else:
+                                logger.warning(f"Empty confusion matrix for '{sheet_name}', skipping")
+                                serializable_result['confusion_matrix'] = None
+                        elif isinstance(matrix, list):
+                            # Already a list, validate structure
+                            if matrix and len(matrix) > 0 and all(isinstance(row, list) for row in matrix):
+                                serializable_result['confusion_matrix'] = matrix
+                                logger.debug(f"Successfully saved list confusion matrix for '{sheet_name}'")
+                            else:
+                                logger.warning(f"Invalid matrix structure for '{sheet_name}', skipping")
+                                serializable_result['confusion_matrix'] = None
                         else:
-                            serializable_result['confusion_matrix'] = matrix
-                    except Exception:
-                        pass  # Skip if can't serialize matrix
+                            logger.warning(f"Unknown matrix type for '{sheet_name}': {type(matrix)}, skipping")
+                            serializable_result['confusion_matrix'] = None
+                    except Exception as matrix_error:
+                        logger.error(f"Failed to serialize confusion matrix for '{sheet_name}': {matrix_error}")
+                        serializable_result['confusion_matrix'] = None
+                        # Continue without matrix rather than failing entire save
+                else:
+                    logger.debug(f"No confusion matrix to save for '{sheet_name}'")
+                    serializable_result['confusion_matrix'] = None
                 
                 # Add QC summary (qc_summary already calculated above)
                 try:
@@ -6297,11 +6622,31 @@ class StatisticalAnalyzer:
             self.project_metadata = project_data['project_info']
             
             self.update_activity_indicator("Project saved!")
-            messagebox.showinfo("Save Complete", 
-                              f"Project saved successfully!\n\n"
-                              f"File: {filename}\n"
-                              f"Sheets saved: {len(self.batch_results)}\n"
-                              f"Successful analyses: {project_data['metadata']['successful_analyses']}")
+            
+            # Build detailed success message
+            success_msg = f"Project saved successfully!\n\n"
+            success_msg += f"File: {filename}\n"
+            success_msg += f"Sheets saved: {len(self.batch_results)}\n"
+            success_msg += f"Successful analyses: {project_data['metadata']['successful_analyses']}"
+            
+            # Check for any serialization issues during save
+            missing_critical_data = []
+            for sheet_name, result in self.batch_results.items():
+                if result.get('confusion_matrix') is None:
+                    missing_critical_data.append(f"{sheet_name}: confusion_matrix")
+                if result.get('class_metrics') is None and 'class_metrics' in result:
+                    missing_critical_data.append(f"{sheet_name}: class_metrics")
+            
+            if missing_critical_data:
+                success_msg += f"\n\n⚠️ Some data could not be saved:\n"
+                for item in missing_critical_data[:3]:  # Show first 3 issues
+                    success_msg += f"• {item}\n"
+                if len(missing_critical_data) > 3:
+                    success_msg += f"• ... and {len(missing_critical_data) - 3} more items\n"
+                success_msg += "\nCheck application log for details."
+                messagebox.showwarning("Save Complete with Issues", success_msg)
+            else:
+                messagebox.showinfo("Save Complete", success_msg)
             
         except TypeError as e:
             # Specific handler for JSON serialization errors
@@ -6344,11 +6689,19 @@ class StatisticalAnalyzer:
             if 'analysis_results' not in project_data:
                 raise ValueError("Invalid project file: missing analysis results")
             
+            # Verify project integrity before loading
+            integrity_issues = self.verify_project_integrity(project_data)
+            if integrity_issues:
+                logger.warning(f"Project integrity issues detected: {integrity_issues}")
+            
             # Clear existing results
             self.batch_results = {}
             
             # Load analysis results
             loaded_count = 0
+            failed_sheets = []  # Track failed sheets for reporting
+            total_sheets = len(project_data['analysis_results'])
+            
             for sheet_name, result_data in project_data['analysis_results'].items():
                 try:
                     # Reconstruct the result object
@@ -6361,12 +6714,23 @@ class StatisticalAnalyzer:
                         'timestamp': result_data.get('timestamp')
                     }
                     
-                    # Reconstruct matrix_shape from old format if needed
+                    # Reconstruct matrix_shape - prioritize new format, fallback to old format
                     if 'matrix_shape' in result_data:
-                        result['matrix_shape'] = tuple(result_data['matrix_shape'])
+                        try:
+                            result['matrix_shape'] = tuple(result_data['matrix_shape'])
+                        except (ValueError, TypeError) as shape_error:
+                            logger.warning(f"Invalid matrix_shape for '{sheet_name}': {shape_error}")
+                            # Fallback to old format
+                            total_rows = result_data.get('total_rows', 0)
+                            total_cols = result_data.get('total_cols', 0)
+                            result['matrix_shape'] = (total_rows, total_cols)
                     elif 'total_rows' in result_data and 'total_cols' in result_data:
                         # Old format - reconstruct matrix_shape
                         result['matrix_shape'] = (result_data.get('total_rows', 0), result_data.get('total_cols', 0))
+                    else:
+                        # Default shape if neither format is available
+                        result['matrix_shape'] = (0, 0)
+                        logger.warning(f"No dimension data found for '{sheet_name}', using default shape")
                     
                     # Reconstruct data completeness - calculate if not present
                     if 'data_completeness' in result_data:
@@ -6400,35 +6764,67 @@ class StatisticalAnalyzer:
                     if 'total_observations' not in result:
                         result['total_observations'] = result_data.get('total_observations', 0)
                     
-                    # Restore class_metrics if available
+                    # Restore class metrics if available
                     if 'class_metrics' in result_data:
-                        result['class_metrics'] = result_data['class_metrics']
+                        try:
+                            result['class_metrics'] = result_data['class_metrics']
+                        except Exception as metrics_error:
+                            logger.warning(f"Could not restore class metrics for '{sheet_name}': {metrics_error}")
+                            result['class_metrics'] = None
                     
                     # Restore labels if available
                     if 'category_labels' in result_data:
-                        result['category_labels'] = result_data['category_labels']
-                    if 'row_labels' in result_data:
-                        result['row_labels'] = result_data['row_labels']
+                        try:
+                            result['category_labels'] = result_data['category_labels']
+                        except Exception as labels_error:
+                            logger.warning(f"Could not restore category labels for '{sheet_name}': {labels_error}")
+                            result['category_labels'] = None
                     
-                    # Reconstruct confusion matrix
+                    if 'row_labels' in result_data:
+                        try:
+                            result['row_labels'] = result_data['row_labels']
+                        except Exception as labels_error:
+                            logger.warning(f"Could not restore row labels for '{sheet_name}': {labels_error}")
+                            result['row_labels'] = None
+                    
+                    # Reconstruct confusion matrix with better error handling
                     if 'confusion_matrix' in result_data:
                         matrix_data = result_data['confusion_matrix']
                         if matrix_data:
                             try:
                                 result['confusion_matrix'] = np.array(matrix_data)
+                                # Validate matrix dimensions match matrix_shape
+                                if result['matrix_shape'] != (0, 0):
+                                    actual_shape = result['confusion_matrix'].shape
+                                    expected_shape = result['matrix_shape']
+                                    if actual_shape != expected_shape:
+                                        logger.warning(f"Matrix shape mismatch for '{sheet_name}': expected {expected_shape}, got {actual_shape}")
                             except Exception as matrix_error:
-                                logger.warning(f"Could not convert confusion matrix to numpy array for '{sheet_name}': {matrix_error}")
+                                logger.error(f"Could not convert confusion matrix to numpy array for '{sheet_name}': {matrix_error}")
                                 result['confusion_matrix'] = None
+                                failed_sheets.append((sheet_name, f"Matrix conversion failed: {str(matrix_error)}"))
+                        else:
+                            logger.warning(f"Empty confusion matrix data for '{sheet_name}'")
+                            result['confusion_matrix'] = None
+                    else:
+                        logger.warning(f"Missing confusion matrix for '{sheet_name}'")
+                        result['confusion_matrix'] = None
                     
                     # Store QC summary if available
                     if 'qc_summary' in result_data:
-                        result['qc_summary'] = result_data['qc_summary']
+                        try:
+                            result['qc_summary'] = result_data['qc_summary']
+                        except Exception as qc_error:
+                            logger.warning(f"Could not restore QC summary for '{sheet_name}': {qc_error}")
+                            result['qc_summary'] = None
                     
                     self.batch_results[sheet_name] = result
                     loaded_count += 1
                     
                 except Exception as e:
-                    logger.warning(f"Could not load sheet '{sheet_name}': {e}")
+                    error_msg = f"Sheet processing failed: {str(e)}"
+                    failed_sheets.append((sheet_name, error_msg))
+                    logger.error(f"Could not load sheet '{sheet_name}': {e}", exc_info=True)
                     continue
             
             if loaded_count == 0:
@@ -6458,17 +6854,30 @@ class StatisticalAnalyzer:
                 except Exception as e:
                     logger.warning(f"Could not update QC panel: {e}")
                 
-                # Show success message
+                # Show detailed success/failure message
                 project_info = project_data.get('project_info', {})
                 project_name = project_info.get('name', 'Unknown')
                 created_date = project_info.get('created', 'Unknown')
                 
-                messagebox.showinfo("Load Complete", 
-                                  f"Project loaded successfully!\n\n"
-                                  f"Project: {project_name}\n"
-                                  f"File: {os.path.basename(filename)}\n"
-                                  f"Created: {created_date[:10] if created_date != 'Unknown' else 'Unknown'}\n"
-                                  f"Sheets loaded: {loaded_count}")
+                # Build detailed status message
+                status_msg = f"Project loaded!\n\n"
+                status_msg += f"Project: {project_name}\n"
+                status_msg += f"File: {os.path.basename(filename)}\n"
+                status_msg += f"Created: {created_date[:10] if created_date != 'Unknown' else 'Unknown'}\n"
+                status_msg += f"Sheets loaded: {loaded_count}/{total_sheets}"
+                
+                if failed_sheets:
+                    status_msg += f"\n\n⚠️ Issues detected:\n"
+                    for sheet_name, error in failed_sheets[:3]:  # Show first 3 errors
+                        status_msg += f"• {sheet_name}: {error[:50]}...\n"
+                    if len(failed_sheets) > 3:
+                        status_msg += f"• ... and {len(failed_sheets) - 3} more issues (see log)\n"
+                    status_msg += "\nCheck application log for full details."
+                    
+                    messagebox.showwarning("Load Complete with Issues", status_msg)
+                else:
+                    status_msg += "\n\nAll data loaded successfully!"
+                    messagebox.showinfo("Load Complete", status_msg)
                 
                 self.update_activity_indicator("Project loaded!")
                 

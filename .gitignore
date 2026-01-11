@@ -163,3 +163,18 @@ Thumbs.db
 *.dll
 *.dll
 *.dll
+
+# SECURITY - Never commit credentials!
+*.key
+*.json
+*.pem
+*.p12
+secrets.env
+credentials.env
+firebase-credentials.json
+service-account-key.json
+private-key.txt
+*.pcks8
+*.der
+*.crt
+*.pfx

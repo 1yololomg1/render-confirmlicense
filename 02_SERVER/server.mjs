@@ -1756,6 +1756,104 @@ app.post('/admin/update-license', async (req, res) => {
   }
 });
 
+// Admin endpoint to manually migrate machine ID for fingerprint changes
+app.post('/admin/migrate-machine', async (req, res) => {
+  if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  
+  try {
+    const { licenseId, oldMachineId, newMachineId, reason } = req.body;
+    
+    if (!licenseId || !newMachineId) {
+      return res.status(400).json({ error: 'License ID and new machine ID are required' });
+    }
+    
+    // Get current license data
+    const snapshot = await db.ref(`license/${licenseId}`).once('value');
+    const license = snapshot.val();
+    
+    if (!license) {
+      return res.status(404).json({ error: 'License not found' });
+    }
+    
+    // Verify the old machine ID matches if provided
+    if (oldMachineId && license.computer_id !== oldMachineId) {
+      return res.status(400).json({ 
+        error: 'Old machine ID does not match current license binding',
+        current: license.computer_id,
+        provided: oldMachineId
+      });
+    }
+    
+    // Check if new machine ID is already bound to another active license
+    const conflictCheck = await db.ref('license')
+      .orderByChild('computer_id')
+      .equalTo(newMachineId)
+      .once('value');
+    
+    const conflicts = [];
+    conflictCheck.forEach(child => {
+      if (child.key !== licenseId) {
+        const conflictLicense = child.val();
+        if (conflictLicense.status === 'active' && 
+            new Date(conflictLicense.expires) > new Date()) {
+          conflicts.push({
+            id: child.key,
+            email: conflictLicense.email,
+            tier: conflictLicense.tier
+          });
+        }
+      }
+    });
+    
+    if (conflicts.length > 0) {
+      return res.status(409).json({ 
+        error: 'New machine ID is already bound to another active license',
+        conflicts
+      });
+    }
+    
+    // Create migration record
+    const migrationRecord = {
+      from_machine_id: license.computer_id,
+      to_machine_id: newMachineId,
+      migrated_at: new Date().toISOString(),
+      reason: reason || 'Fingerprint algorithm update',
+      migrated_by: 'admin',
+      previous_binding_method: license.binding_method || 'unknown'
+    };
+    
+    // Update license with new machine ID and migration record
+    await db.ref(`license/${licenseId}`).update({
+      computer_id: newMachineId,
+      bound_at: new Date().toISOString(),
+      binding_method: 'admin_migration',
+      migration_record: migrationRecord,
+      last_updated: new Date().toISOString(),
+      updated_by: 'admin'
+    });
+    
+    console.log(`✓ License ${licenseId} migrated from ${license.computer_id?.substring(0, 8)}... to ${newMachineId?.substring(0, 8)}...`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Machine ID migrated successfully',
+      migration: {
+        licenseId,
+        fromMachineId: license.computer_id,
+        toMachineId: newMachineId,
+        migratedAt: migrationRecord.migrated_at,
+        reason: migrationRecord.reason
+      }
+    });
+    
+  } catch (error) {
+    console.error('Machine migration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Admin endpoint to DELETE a license permanently
 app.post('/admin/delete-license', async (req, res) => {
   if (!sharedSecret || req.get('x-app-secret') !== sharedSecret) {
