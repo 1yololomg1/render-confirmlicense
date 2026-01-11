@@ -1,0 +1,61 @@
+LICENSE KEYS FOR CONTEST EVALUATION - LMA EDGE Hackathon
+=========================================================
+
+IMPORTANT: These license keys were generated on 2026-04-11 and are valid for use
+with the contest evaluation server. They are pre-activated and ready to use.
+
+Each license key can be used on ONE machine. If you get an error that a license 
+is already activated, try the next key in the list.
+
+DEMO LICENSE KEY 1:
+f0ab2a970a5da8ce:2026-04-11T11:59:51.774Z:345a2a93bcbf1e69
+
+DEMO LICENSE KEY 2:
+6fe15926bc022b27:2026-04-11T12:00:20.254Z:da7129f9b475626b
+
+DEMO LICENSE KEY 3:
+d7499d5d599eb45a:2026-04-11T12:00:38.790Z:265f50564d99bfb3
+
+DEMO LICENSE KEY 4:
+0fb1fedabf14e2a0:2026-04-11T12:00:53.996Z:dc1b926f3bc65f3b
+
+DEMO LICENSE KEY 5:
+3f393af01c791f2c:2026-04-11T12:01:09.413Z:7ec66fad90c817ec
+
+DEMO LICENSE KEY 6:
+39b80c162b065b2c:2026-04-11T12:01:24.742Z:8db0c0b423319cd1
+
+DEMO LICENSE KEY 7:
+c45f66bc44aa40cf:2026-04-11T12:01:39.275Z:8fef65080f234de8
+
+DEMO LICENSE KEY 8:
+359f3a5968f4ab42:2026-04-11T12:01:52.463Z:f6e6c6f562b7aaf4
+
+DEMO LICENSE KEY 9:
+4f498380c67bcfae:2026-04-11T12:02:15.419Z:dd5b9864a07e1186
+
+DEMO LICENSE KEY 10:
+54cf1b49ebeb94ea:2026-04-11T12:02:32.352Z:9c8268555d7aca3a
+
+INSTRUCTIONS:
+1. Run the CONFIRM executable
+2. When prompted for a license key, copy one of the keys above
+3. Paste it exactly (no extra spaces)
+4. The software will activate automatically
+5. Internet connection required for initial activation only
+
+NEED MORE LICENSES?
+If all keys are in use or you need additional licenses:
+- Email: info@traceseis.com or alvarochf@traceseis.com
+- Subject: "LMA EDGE Hackathon - Judge License Request"
+- We'll provide a license within 24 hours
+
+TROUBLESHOOTING:
+- "License already activated": Try the next key in the list
+- "Invalid license key": Make sure you copied the entire key (includes colons)
+- "Cannot connect to server": Ensure internet connection for initial activation
+
+NOTE FOR CONTEST ADMINISTRATORS:
+These license keys were pre-generated and are valid for the contest evaluation
+period. The keys are tied to the production license server and will work
+throughout the judging period.

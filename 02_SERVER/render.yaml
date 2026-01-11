@@ -34,11 +34,11 @@ services:
         value: https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40confirm-license-manager.iam.gserviceaccount.com
       - key: universe_domain
         value: googleapis.com
-      # Application Secrets (REQUIRED)
+      # Application Secrets (REQUIRED) - Generate new secrets, do not use examples!
       - key: SHARED_SECRET
-        value: <SET_IN_RENDER_DASHBOARD>
+        value: generate-new-32-character-secret
       - key: LICENSE_SECRET
-        value: <SET_IN_RENDER_DASHBOARD>
+        value: generate-new-32-character-secret
       # Optional Services (can be left empty)
       - key: STRIPE_SECRET_KEY
         value: your_stripe_secret_key_here
