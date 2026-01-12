@@ -1,0 +1,35 @@
+CONFIRM Batch Analysis: Strategic Recommendations
+
+1. Approve for Automated Execution: Sector vs. Breach
+
+    Verdict: High Reliability.
+
+    Technical Justification: This configuration achieved the highest Global Fit (80.95) and a strong Cramer’s V (0.6095).
+
+    Operational Note: The model shows high integrity in distinguishing between Industry and Finance sectors, with minimal "leakage" or incorrect guesses between the predicted neurons and actual outcomes. This math is regulator-ready and provides a clear audit trail for credit decisioning.
+
+2. Conditional Approval / Supervised Use: Borrower vs. ESG
+
+    Verdict: Moderate Reliability.
+
+    Technical Justification: With a Global Fit of 62.41, this model effectively categorizes Sovereigns and Corporates but shows slight noise in SME classifications.
+
+    Operational Note: It is a "supervisor-approved" model, but we recommend manual oversight for SME borrowers until more training data is ingested to sharpen the 3-neuron map.
+
+3. Reject / Redesign Required: Region vs. Default
+
+    Verdict: High Risk of "Black Box" Errors.
+
+    Technical Justification: The Global Fit is only 50.32, and the Cramer’s V (0.2539) indicates a weak statistical association.
+
+    Operational Note: The model is essentially "guessing" when predicting defaults based on region, particularly between South Europe and the Middle East. Relying on this math would lead to "building on shifting sand." Recommend adding more granular macro-economic variables before redeployment.
+
+4. Immediate Deactivation: Jurisdiction vs. Clause
+
+    Verdict: Statistically Insignificant.
+
+    Technical Justification: This configuration failed the "gauntlet" with a Cramer’s V of 0.0000.
+
+    Operational Note: A Cramer's V of zero means there is no observable relationship between the model’s predictions and the actual legal clauses. This model provides no predictive value and must be removed from the workflow to maintain geophysical-level rigor.
+
+Summary Conclusion: CONFIRM has identified that while your 'Engine' is fast, it is only truly calibrated for Sector-based risk. By providing this transparent report, we ensure that regulators and board members see the math, not just the hype. Trust the math that stands the test of time; ignore the luck, and rely on the Grade.
