@@ -1637,7 +1637,7 @@ app.post('/validate-cached', async (req, res) => {
       .digest('hex')
       .substring(0, 16);
 
-    if (hash !== expectedHash) {
+    if (!crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expectedHash))) {
       return res.json({ valid: false, error: 'Invalid license signature' });
     }
 
